@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
+import 'package:rateify/screens/main_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -78,12 +79,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       );
 
       if (kDebugMode) {
-        print('Response from Spotify: ${tokenResponse.statusCode} ${tokenResponse.body}');
+        print(
+          'Response from Spotify: ${tokenResponse.statusCode} ${tokenResponse.body}',
+        );
       }
 
       if (tokenResponse.statusCode != 200) {
         final errorJson = json.decode(tokenResponse.body);
-        throw Exception("Failed to get access token: ${errorJson['error_description'] ?? tokenResponse.body}");
+        throw Exception(
+          "Failed to get access token: ${errorJson['error_description'] ?? tokenResponse.body}",
+        );
       }
 
       final tokenJson = json.decode(tokenResponse.body);
@@ -93,10 +98,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         throw Exception("Access token not found in token response");
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Spotify Access Token: $accessToken")),
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainScreen()),
       );
-
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -109,10 +114,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   String _generateCodeVerifier() {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
     final random = Random.secure();
     return String.fromCharCodes(
-      Iterable.generate(128, (_) => chars.codeUnitAt(random.nextInt(chars.length))),
+      Iterable.generate(
+        128,
+        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
+      ),
     );
   }
 
@@ -143,10 +152,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1DB954),
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 15,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
                 ),
-                onPressed: _isLoggingIn ? null : () => _loginWithSpotify(context),
+                onPressed: _isLoggingIn
+                    ? null
+                    : () => _loginWithSpotify(context),
                 child: const Text(
                   "Connect with Spotify",
                   style: TextStyle(color: Colors.white, fontSize: 18),

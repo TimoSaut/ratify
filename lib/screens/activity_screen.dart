@@ -6,7 +6,13 @@ class ActivityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(child: Text("Activity Screen")),
+     backgroundColor: Colors.black,
+      body: Center(
+        child: Text(
+          "Activity Screen",
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 }

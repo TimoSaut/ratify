@@ -6,7 +6,13 @@ class SongDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(child: Text("Song Detail Screen")),
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Text(
+          "Song Detail Screen",
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 }
