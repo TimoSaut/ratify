@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'activity_screen.dart';
-import 'song_detail_screen.dart';
+import 'library_screen.dart';
 import 'dashboard_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -23,7 +23,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        color: Colors.black, // Hintergrund für alle Screens
+        color: Colors.black,
         child: _screens[_currentIndex],
       ),
       bottomNavigationBar: BottomNavigationBar(

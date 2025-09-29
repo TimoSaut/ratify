@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+class SongDetailScreen extends StatelessWidget {
+  const SongDetailScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +29,7 @@ class DashboardScreen extends StatelessWidget {
       ),
       body: const Center(
         child: Text(
-          "Dashboard Screen",
+          "Library Screen",
           style: TextStyle(color: Colors.white),
         ),
       ),
