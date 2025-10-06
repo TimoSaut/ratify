@@ -16,7 +16,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = const [
     DashboardScreen(),
     ActivityScreen(),
-    SongDetailScreen(),
+    LibraryScreen(),
   ];
 
   @override
@@ -43,7 +43,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note),
-            label: "Songs",
+            label: "Library",
           ),
         ],
       ),

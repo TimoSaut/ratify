@@ -29,7 +29,11 @@ class DashboardScreen extends StatelessWidget {
         ),
         title: const Text(
           "Dashboard",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: Padding(
@@ -58,10 +62,10 @@ class DashboardScreen extends StatelessWidget {
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
                 children: const [
-                  _StatCard(label: "Rated Songs", value: "0"),
-                  _StatCard(label: "Unrated Songs", value: "0"),
-                  _StatCard(label: "Pending Requests", value: "0"),
-                  _StatCard(label: "Total Playlists", value: "0"),
+                  _StatCard(label: "Rated Songs", value: "34"),
+                  _StatCard(label: "Unrated Songs", value: "82"),
+                  _StatCard(label: "Pending Requests", value: "1"),
+                  _StatCard(label: "Total Playlists", value: "5"),
                 ],
               ),
             ),
@@ -100,10 +104,7 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ],
         ),

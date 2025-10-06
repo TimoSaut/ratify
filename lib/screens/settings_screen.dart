@@ -6,7 +6,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, 
+      backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
@@ -18,16 +18,17 @@ class SettingsScreen extends StatelessWidget {
             },
             child: CircleAvatar(
               backgroundColor: const Color(0xFF535353),
-              child: const Icon(
-                Icons.person,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.person, color: Colors.white),
             ),
           ),
         ),
         title: const Text(
           "Settings",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
       body: Padding(
@@ -40,8 +41,7 @@ class SettingsScreen extends StatelessWidget {
                 "Logout",
                 style: TextStyle(color: Colors.white),
               ),
-              onTap: () {
-              },
+              onTap: () {},
             ),
           ],
         ),
