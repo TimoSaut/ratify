@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_screen.dart';
+import '../providers/library_provider.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final songs = ref.watch(libraryProvider);
+    final ratedCount = songs.length;
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -55,17 +60,16 @@ class DashboardScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-
             Expanded(
               child: GridView.count(
                 crossAxisCount: 2,
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
-                children: const [
-                  _StatCard(label: "Rated Songs", value: "34"),
-                  _StatCard(label: "Unrated Songs", value: "82"),
-                  _StatCard(label: "Pending Requests", value: "1"),
-                  _StatCard(label: "Total Playlists", value: "5"),
+                children: [
+                  _StatCard(label: "Rated Songs", value: ratedCount.toString()),
+                  const _StatCard(label: "Unrated Songs", value: "82"),
+                  const _StatCard(label: "Pending Requests", value: "1"),
+                  const _StatCard(label: "Total Playlists", value: "5"),
                 ],
               ),
             ),

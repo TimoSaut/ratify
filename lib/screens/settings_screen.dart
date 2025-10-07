@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rateify/auth/token_storage.dart';
 import 'package:rateify/screens/welcome_screen.dart';
+import '../providers/library_provider.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -15,12 +17,10 @@ class SettingsScreen extends StatelessWidget {
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
           child: GestureDetector(
-            onTap: () {
-              Navigator.of(context).pop();
-            },
-            child: CircleAvatar(
-              backgroundColor: const Color(0xFF535353),
-              child: const Icon(Icons.person, color: Colors.white),
+            onTap: () => Navigator.of(context).pop(),
+            child: const CircleAvatar(
+              backgroundColor: Color(0xFF535353),
+              child: Icon(Icons.person, color: Colors.white),
             ),
           ),
         ),
@@ -54,6 +54,21 @@ class SettingsScreen extends StatelessWidget {
                   );
                 }
               },
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(libraryProvider.notifier).addSong(Song("Test Song"));
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1DB954),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                "Add Rated Song",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),

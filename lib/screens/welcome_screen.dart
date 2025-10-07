@@ -1,59 +1,45 @@
-import 'dart:convert';
-import 'dart:math';
-import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rateify/screens/main_screen.dart';
-import '../auth/auth_service.dart';
-import '../auth/token_storage.dart';
+import 'package:rateify/providers/activity_provider.dart';
+import 'package:rateify/providers/auth_provider.dart';
 
-class WelcomeScreen extends StatefulWidget {
+class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
 
-  @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
-}
+  Future<void> _handleLogin(WidgetRef ref, BuildContext context) async {
+    final authService = ref.read(authServiceProvider);
+    final isLoggingIn = ref.read(isLoggingInProvider.notifier);
+    final isLoggedIn = ref.read(isLoggedInProvider.notifier);
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
-  bool _isLoggingIn = false;
+    if (ref.read(isLoggingInProvider)) return;
 
-  final AuthService _authService = AuthService(tokenStorage: TokenStorage());
-
-  Future<void> _handleLogin() async {
-    if (_isLoggingIn) return;
-
-    setState(() {
-      _isLoggingIn = true;
-    });
-
+    isLoggingIn.state = true;
     try {
-      await _authService.login();
+      await authService.login();
+      isLoggedIn.state = true;
 
-      if (mounted) {
+      if (context.mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MainScreen()),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Login failed: $e")));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Login failed: $e")),
+        );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoggingIn = false;
-        });
-      }
+      isLoggingIn.state = false;
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoggingIn = ref.watch(isLoggingInProvider);
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -81,10 +67,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                onPressed: _handleLogin,
-                child: const Text(
-                  "Connect with Spotify",
-                  style: TextStyle(color: Colors.white, fontSize: 18),
+                onPressed: isLoggingIn
+                    ? null
+                    : () => _handleLogin(ref, context),
+                child: Text(
+                  isLoggingIn
+                      ? "Connecting..."
+                      : "Connect with Spotify",
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
             ],

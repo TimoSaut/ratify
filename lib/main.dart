@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/main_screen.dart';
 import 'auth/token_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-
-Future<Widget> _getInitialScreen() async {
+  Future<Widget> _getInitialScreen() async {
     final tokenStorage = TokenStorage();
     final accessToken = await tokenStorage.getAccessToken();
     if (accessToken != null) {
