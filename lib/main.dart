@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:rateify/screens/welcome_screen.dart'; 
+import 'screens/welcome_screen.dart';
+import 'screens/main_screen.dart';
+import 'auth/token_storage.dart';
 
 void main() {
   runApp(const MyApp());
@@ -8,30 +10,33 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+
+Future<Widget> _getInitialScreen() async {
+    final tokenStorage = TokenStorage();
+    final accessToken = await tokenStorage.getAccessToken();
+    if (accessToken != null) {
+      return const MainScreen();
+    }
+    return const WelcomeScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      title: 'Rateify',
+      theme: ThemeData.dark(),
+      home: FutureBuilder<Widget>(
+        future: _getInitialScreen(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          } else {
+            return snapshot.data!;
+          }
+        },
       ),
-      home: const WelcomeScreen(),
     );
   }
 }

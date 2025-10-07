@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:rateify/auth/token_storage.dart';
+import 'package:rateify/screens/welcome_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -36,12 +38,22 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           children: [
             ListTile(
-              leading: const Icon(Icons.library_books, color: Colors.white),
+              leading: const Icon(Icons.logout, color: Colors.white),
               title: const Text(
                 "Logout",
                 style: TextStyle(color: Colors.white),
               ),
-              onTap: () {},
+              onTap: () async {
+                final storage = TokenStorage();
+                await storage.clearTokens();
+                if (context.mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+                    (route) => false,
+                  );
+                }
+              },
             ),
           ],
         ),
