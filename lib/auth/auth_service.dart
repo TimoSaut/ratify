@@ -94,6 +94,54 @@ class AuthService {
     }
   }
 
+  Future<String> refreshAccessToken() async {
+    final storedRefreshToken = await tokenStorage.getRefreshToken();
+    if (storedRefreshToken == null) throw Exception("No refresh token stored");
+
+    final tokenUrl = Uri.https('accounts.spotify.com', '/api/token');
+    final response = await http.post(
+      tokenUrl,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: {
+        'client_id': clientId,
+        'grant_type': 'refresh_token',
+        'refresh_token': storedRefreshToken,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to refresh access token: ${response.body}");
+    }
+
+    final tokenJson = json.decode(response.body);
+    final accessToken = tokenJson['access_token'] as String?;
+    if (accessToken == null) throw Exception("access_token not found in response");
+
+    final expiresIn = (tokenJson['expires_in'] as num?)?.toInt() ?? 3600;
+    final expiryMs = DateTime.now().millisecondsSinceEpoch + expiresIn * 1000;
+
+    final newRefreshToken = (tokenJson['refresh_token'] as String?) ?? storedRefreshToken;
+    await tokenStorage.saveTokens(accessToken, newRefreshToken);
+    await tokenStorage.saveExpiry(expiryMs);
+
+    return accessToken;
+  }
+
+  Future<bool> isTokenExpired() async {
+    final expiry = await tokenStorage.getExpiry();
+    if (expiry == null) return true;
+    return DateTime.now().millisecondsSinceEpoch >= expiry;
+  }
+
+  Future<String> getValidAccessToken() async {
+    if (await isTokenExpired()) {
+      return refreshAccessToken();
+    }
+    final token = await tokenStorage.getAccessToken();
+    if (token == null) throw Exception("No access token stored");
+    return token;
+  }
+
   String _generateCodeVerifier() {
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~';
