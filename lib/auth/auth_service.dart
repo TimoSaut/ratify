@@ -94,6 +94,10 @@ class AuthService {
     }
   }
 
+  Future<void> logout() async {
+    await tokenStorage.clearTokens();
+  }
+
   Future<String> refreshAccessToken() async {
     final storedRefreshToken = await tokenStorage.getRefreshToken();
     if (storedRefreshToken == null) throw Exception("No refresh token stored");

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rateify/screens/main_screen.dart';
 import 'package:rateify/providers/activity_provider.dart';
 import 'package:rateify/providers/auth_provider.dart';
+import 'package:rateify/providers/auth_state_provider.dart';
 
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
@@ -18,6 +19,7 @@ class WelcomeScreen extends ConsumerWidget {
     try {
       await authService.login();
       isLoggedIn.state = true;
+      ref.read(authStateProvider.notifier).setLoggedIn();
 
       if (context.mounted) {
         Navigator.pushReplacement(

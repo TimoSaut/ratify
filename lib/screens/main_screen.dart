@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/navigation_provider.dart';
+import '../providers/auth_state_provider.dart';
 import 'activity_screen.dart';
 import 'library_screen.dart';
 import 'dashboard_screen.dart';
+import 'welcome_screen.dart';
 
 class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
@@ -16,6 +18,15 @@ class MainScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<bool>(authStateProvider, (_, isLoggedIn) {
+      if (!isLoggedIn) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          (route) => false,
+        );
+      }
+    });
+
     final currentIndex = ref.watch(navigationIndexProvider);
 
     return Scaffold(

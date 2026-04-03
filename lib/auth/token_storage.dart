@@ -35,5 +35,6 @@ class TokenStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessTokenKey);
     await prefs.remove(_refreshTokenKey);
+    await prefs.remove(_expiryKey);
   }
 }
