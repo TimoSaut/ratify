@@ -1,0 +1,163 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+import '../providers/song_detail_provider.dart';
+
+final selectedRatingProvider = StateProvider.autoDispose<int>((ref) => 0);
+
+class SongDetailScreen extends ConsumerWidget {
+  final Map<String, dynamic> track;
+
+  const SongDetailScreen({super.key, required this.track});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final submitState = ref.watch(songDetailProvider);
+    final selectedRating = ref.watch(selectedRatingProvider);
+
+    ref.listen<AsyncValue<void>>(songDetailProvider, (_, state) {
+      if (state is AsyncData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rating submitted!')),
+        );
+      } else if (state is AsyncError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${state.error}')),
+        );
+      }
+    });
+
+    final trackName = track['name'] as String? ?? '';
+    final artistName =
+        (track['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
+    final imageUrl =
+        ((track['album']?['images'] as List?)?.firstOrNull
+            as Map?)?['url'] as String?;
+
+    final String? songId = track['id'] as String?;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: const Text('Song Detail'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Album art
+            if (imageUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  imageUrl,
+                  width: 220,
+                  height: 220,
+                  fit: BoxFit.cover,
+                ),
+              )
+            else
+              Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  color: Colors.grey[900],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.music_note,
+                    color: Colors.grey, size: 64),
+              ),
+            const SizedBox(height: 20),
+
+            // Track name
+            Text(
+              trackName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+
+            // Artist name
+            Text(
+              artistName,
+              style: const TextStyle(color: Colors.grey, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+
+            // Playback placeholder
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: const Center(
+                child: Icon(Icons.play_circle_fill,
+                    color: Color(0xFF1DB954), size: 56),
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Star rating row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (index) {
+                final starValue = index + 1;
+                return IconButton(
+                  onPressed: () => ref
+                      .read(selectedRatingProvider.notifier)
+                      .state = starValue,
+                  icon: Icon(
+                    starValue <= selectedRating
+                        ? Icons.star
+                        : Icons.star_border,
+                    color: starValue <= selectedRating
+                        ? Colors.white
+                        : Colors.grey,
+                    size: 36,
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 24),
+
+            // Submit button / loading indicator
+            submitState.isLoading
+                ? const CircularProgressIndicator(color: Color(0xFF1DB954))
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1DB954),
+                        disabledBackgroundColor: Colors.grey[800],
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                      onPressed: selectedRating == 0 || songId == null
+                          ? null
+                          : () => ref
+                              .read(songDetailProvider.notifier)
+                              .submitRating(songId, '', selectedRating),
+                      child: Text(
+                        selectedRating == 0 ? 'Select a rating' : 'Submit Rating',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+}
