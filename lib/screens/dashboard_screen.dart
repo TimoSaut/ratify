@@ -117,29 +117,17 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _StatCard(
-                    value: '0',
-                    label: 'Songs\nRated',
-                    accent: const Color(0xFF1DB954),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _StatCard(
-                    value: '0',
-                    label: 'Songs\nUnrated',
-                    accent: const Color(0xFF535353),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _StatCard(
-                    value: '0',
-                    label: 'Requests\nSent',
-                    accent: const Color(0xFF3D3D3D),
-                  ),
-                ),
+                const Expanded(child: _StatCard(value: '0', label: 'Songs Rated')),
+                const SizedBox(width: 12),
+                const Expanded(child: _StatCard(value: '0', label: 'Open Votes')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(child: _StatCard(value: '0', label: 'Proposed Songs')),
+                const SizedBox(width: 12),
+                const Expanded(child: _StatCard(value: '0%', label: 'Acceptance Rate')),
               ],
             ),
           ],
@@ -152,43 +140,36 @@ class DashboardScreen extends ConsumerWidget {
 class _StatCard extends StatelessWidget {
   final String value;
   final String label;
-  final Color accent;
 
-  const _StatCard({
-    required this.value,
-    required this.label,
-    required this.accent,
-  });
+  const _StatCard({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: Colors.grey[900],
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF2A2A2A)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             value,
-            style: TextStyle(
-              color: accent == const Color(0xFF1DB954) ? accent : Colors.white,
+            style: const TextStyle(
+              color: Colors.white,
               fontSize: 32,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
               height: 1,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             label,
-            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.grey,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              height: 1.4,
+              fontSize: 13,
+              letterSpacing: 0.5,
             ),
           ),
         ],
