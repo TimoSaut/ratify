@@ -27,16 +27,10 @@ final playlistsProvider =
   PlaylistsNotifier.new,
 );
 
-class PlaylistTracksNotifier
-    extends FamilyAsyncNotifier<List<Map<String, dynamic>>, String> {
-  @override
-  Future<List<Map<String, dynamic>>> build(String playlistId) async {
+final playlistTracksProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>(
+  (ref, playlistId) async {
     final authService = ref.read(authServiceProvider);
     return SpotifyService(authService: authService).getPlaylistTracks(playlistId);
-  }
-}
-
-final playlistTracksProvider = AsyncNotifierProvider.family<
-    PlaylistTracksNotifier, List<Map<String, dynamic>>, String>(
-  PlaylistTracksNotifier.new,
+  },
 );
