@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/song_detail_provider.dart';
 
 final selectedRatingProvider = StateProvider.autoDispose<int>((ref) => 0);
@@ -9,6 +10,18 @@ class SongDetailScreen extends ConsumerWidget {
   final Map<String, dynamic> track;
 
   const SongDetailScreen({super.key, required this.track});
+
+  Future<void> _openInSpotify(String trackId) async {
+    final deeplink = Uri.parse('spotify:track:$trackId');
+    if (await canLaunchUrl(deeplink)) {
+      await launchUrl(deeplink);
+    } else {
+      await launchUrl(
+        Uri.parse('https://open.spotify.com/track/$trackId'),
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,7 +46,6 @@ class SongDetailScreen extends ConsumerWidget {
     final imageUrl =
         ((track['album']?['images'] as List?)?.firstOrNull
             as Map?)?['url'] as String?;
-
     final String? songId = track['id'] as String?;
 
     return Scaffold(
@@ -92,16 +104,25 @@ class SongDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 32),
 
-            // Playback placeholder
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: const Center(
-                child: Icon(Icons.play_circle_fill,
-                    color: Color(0xFF1DB954), size: 56),
+            // Open in Spotify button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1DB954),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                onPressed:
+                    songId != null ? () => _openInSpotify(songId) : null,
+                icon: const Icon(Icons.play_circle_fill,
+                    color: Colors.white, size: 22),
+                label: const Text(
+                  'Play in Spotify',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
               ),
             ),
             const SizedBox(height: 32),
