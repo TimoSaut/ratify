@@ -112,6 +112,26 @@ class FirestoreService {
     return doc.id;
   }
 
+  Future<String> joinGroup(String inviteCode, String userId) async {
+    final query = await FirebaseFirestore.instance
+        .collection(groupsCollection)
+        .where('inviteCode', isEqualTo: inviteCode)
+        .limit(1)
+        .get();
+    if (query.docs.isEmpty) {
+      throw Exception('Group not found');
+    }
+    final doc = query.docs.first;
+    final members = List<String>.from(doc.data()['members'] as List? ?? []);
+    if (members.contains(userId)) {
+      throw Exception('Already a member');
+    }
+    await doc.reference.update({
+      'members': FieldValue.arrayUnion([userId]),
+    });
+    return doc.data()['name'] as String? ?? '';
+  }
+
   Future<List<Map<String, dynamic>>> getGroupsForUser(String userId) async {
     final query = await FirebaseFirestore.instance
         .collection(groupsCollection)

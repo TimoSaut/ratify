@@ -175,6 +175,160 @@ class GroupsScreen extends ConsumerWidget {
     );
   }
 
+  void _showJoinGroupSheet(BuildContext context, WidgetRef ref) {
+    final codeController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Join Group',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: codeController,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          letterSpacing: 4,
+                          fontWeight: FontWeight.bold),
+                      textCapitalization: TextCapitalization.characters,
+                      maxLength: 6,
+                      onChanged: (v) {
+                        final upper = v.toUpperCase();
+                        if (v != upper) {
+                          codeController.value = codeController.value
+                              .copyWith(text: upper);
+                        }
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Invite code',
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        counterStyle:
+                            const TextStyle(color: Colors.grey),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF2A2A2A)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF1DB954)),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Colors.red),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (v.trim().length != 6) return 'Code must be 6 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1DB954),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setState(() => isLoading = true);
+                                try {
+                                  final userId = ref
+                                      .read(userProvider)
+                                      .value?['id'] as String?;
+                                  if (userId == null) return;
+                                  final groupName =
+                                      await FirestoreService().joinGroup(
+                                    codeController.text.trim(),
+                                    userId,
+                                  );
+                                  ref.invalidate(_groupsProvider);
+                                  if (context.mounted) {
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content:
+                                          Text('Joined "$groupName"!'),
+                                    ));
+                                  }
+                                } catch (e) {
+                                  setState(() => isLoading = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content: Text('$e'),
+                                    ));
+                                  }
+                                }
+                              },
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Join',
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 16),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final groupsAsync = ref.watch(_groupsProvider);
@@ -194,11 +348,24 @@ class GroupsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF1DB954),
-        foregroundColor: Colors.white,
-        onPressed: () => _showCreateGroupSheet(context, ref),
-        child: const Icon(Icons.add),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton(
+            onPressed: () => _showJoinGroupSheet(context, ref),
+            child: const Text(
+              'Join Group',
+              style: TextStyle(color: Colors.white, fontSize: 15),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FloatingActionButton(
+            backgroundColor: const Color(0xFF1DB954),
+            foregroundColor: Colors.white,
+            onPressed: () => _showCreateGroupSheet(context, ref),
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
       body: groupsAsync.when(
         loading: () => const Center(
