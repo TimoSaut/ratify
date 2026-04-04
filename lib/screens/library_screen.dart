@@ -15,6 +15,8 @@ class LibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedTab = ref.watch(_libraryToggleProvider);
+    final profileImageUrl =
+        ref.watch(userProvider).value?['images']?.first?['url'] as String?;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -27,11 +29,17 @@ class LibraryScreen extends ConsumerWidget {
             context,
             MaterialPageRoute(builder: (_) => const SettingsScreen()),
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(8.0),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundColor: Color(0xFF535353),
-              child: Icon(Icons.person, color: Colors.white),
+              radius: 16,
+              backgroundColor: const Color(0xFF535353),
+              backgroundImage: profileImageUrl != null
+                  ? NetworkImage(profileImageUrl)
+                  : null,
+              child: profileImageUrl == null
+                  ? const Icon(Icons.person, color: Colors.white)
+                  : null,
             ),
           ),
         ),

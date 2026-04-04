@@ -9,6 +9,8 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(userProvider);
+    final profileImageUrl =
+        userAsync.value?['images']?.first?['url'] as String?;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -21,11 +23,17 @@ class DashboardScreen extends ConsumerWidget {
             context,
             MaterialPageRoute(builder: (_) => const SettingsScreen()),
           ),
-          child: const Padding(
-            padding: EdgeInsets.all(8.0),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundColor: Color(0xFF535353),
-              child: Icon(Icons.person, color: Colors.white),
+              radius: 16,
+              backgroundColor: const Color(0xFF535353),
+              backgroundImage: profileImageUrl != null
+                  ? NetworkImage(profileImageUrl)
+                  : null,
+              child: profileImageUrl == null
+                  ? const Icon(Icons.person, color: Colors.white)
+                  : null,
             ),
           ),
         ),

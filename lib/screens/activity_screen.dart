@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_screen.dart';
+import '../providers/spotify_provider.dart';
 
-class ActivityScreen extends StatelessWidget {
+class ActivityScreen extends ConsumerWidget {
   const ActivityScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileImageUrl =
+        ref.watch(userProvider).value?['images']?.first?['url'] as String?;
+
     final List<Map<String, String>> activities = [
       {
         "user": "Danny",
@@ -52,11 +57,17 @@ class ActivityScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             );
           },
-          child: const Padding(
-            padding: EdgeInsets.all(8.0),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundColor: Color(0xFF535353),
-              child: Icon(Icons.person, color: Colors.white),
+              radius: 16,
+              backgroundColor: const Color(0xFF535353),
+              backgroundImage: profileImageUrl != null
+                  ? NetworkImage(profileImageUrl)
+                  : null,
+              child: profileImageUrl == null
+                  ? const Icon(Icons.person, color: Colors.white)
+                  : null,
             ),
           ),
         ),
