@@ -29,4 +29,4 @@ local.properties
 
 # Misc
 *.log
-*.lock
+*.lockios/Runner/GoogleService-Info.plist
