@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/song_detail_provider.dart';
+import '../providers/spotify_provider.dart';
 
 final selectedRatingProvider = StateProvider.autoDispose<int>((ref) => 0);
 
@@ -52,6 +53,7 @@ class SongDetailScreen extends ConsumerWidget {
 
     ref.listen<AsyncValue<void>>(songDetailProvider, (_, state) {
       if (state is AsyncData) {
+        ref.invalidate(userRatingsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Rating submitted!')),
         );

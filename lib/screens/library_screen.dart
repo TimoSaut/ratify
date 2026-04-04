@@ -305,49 +305,51 @@ class _SongListState extends ConsumerState<_SongList> {
               (label: '5★', value: 5),
               (label: 'Unrated', value: 0),
             ];
-            return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
-                    child: Text(
-                      'Filter by Rating',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  ...options.map((opt) {
-                    final selected = activeFilter == opt.value;
-                    return ListTile(
-                      title: Text(
-                        opt.label,
-                        style: TextStyle(
-                          color: selected
-                              ? const Color(0xFF1DB954)
-                              : Colors.white,
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      trailing: selected
-                          ? const Icon(Icons.check,
-                              color: Color(0xFF1DB954), size: 18)
-                          : null,
-                      onTap: () {
-                        ref.read(_songFilterProvider.notifier).state =
-                            opt.value;
-                        Navigator.pop(context);
-                      },
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                ],
+            return ListView(
+              shrinkWrap: true,
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).padding.bottom + 16,
               ),
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(4, 4, 4, 8),
+                  child: Text(
+                    'Filter by Rating',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+                ...options.map((opt) {
+                  final selected = activeFilter == opt.value;
+                  return ListTile(
+                    title: Text(
+                      opt.label,
+                      style: TextStyle(
+                        color: selected
+                            ? const Color(0xFF1DB954)
+                            : Colors.white,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: selected
+                        ? const Icon(Icons.check,
+                            color: Color(0xFF1DB954), size: 18)
+                        : null,
+                    onTap: () {
+                      ref.read(_songFilterProvider.notifier).state =
+                          opt.value;
+                      Navigator.pop(context);
+                    },
+                  );
+                }),
+              ],
             );
           },
         );
