@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class FirestoreService {
   static const String usersCollection = 'users';
   static const String playlistsCollection = 'playlists';
@@ -18,8 +20,19 @@ class FirestoreService {
 
   Future<void> submitRating(
       String songId, String userId, int rating) async {
-    // TODO: implement submitRating
-    print('TODO: submitRating songId=$songId userId=$userId rating=$rating');
+    try {
+      await FirebaseFirestore.instance
+          .collection(ratingsCollection)
+          .add({
+        'songId': songId,
+        'userId': userId,
+        'rating': rating,
+        'timestamp': DateTime.now(),
+      });
+    } catch (e) {
+      print('submitRating error: $e');
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
