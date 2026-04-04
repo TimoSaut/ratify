@@ -74,6 +74,23 @@ class FirestoreService {
     }
   }
 
+  Future<Map<String, int>> getAllUserRatings(String userId) async {
+    final query = await FirebaseFirestore.instance
+        .collection(ratingsCollection)
+        .where('userId', isEqualTo: userId)
+        .get();
+    final result = <String, int>{};
+    for (final doc in query.docs) {
+      final data = doc.data();
+      final songId = data['songId'] as String?;
+      final rating = data['rating'] as int?;
+      if (songId != null && rating != null) {
+        result[songId] = rating;
+      }
+    }
+    return result;
+  }
+
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
     // TODO: implement getPendingVotes
     print('TODO: getPendingVotes songId=$songId');

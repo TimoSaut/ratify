@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/spotify_service.dart';
+import '../services/firestore_service.dart';
 import 'auth_provider.dart';
 
 class UserNotifier extends AsyncNotifier<Map<String, dynamic>> {
@@ -144,3 +145,10 @@ final playlistTracksProvider =
     return SpotifyService(authService: authService).getPlaylistTracks(playlistId);
   },
 );
+
+final userRatingsProvider = FutureProvider<Map<String, int>>((ref) async {
+  final userAsync = ref.watch(userProvider);
+  final userId = userAsync.value?['id'] as String?;
+  if (userId == null) return {};
+  return FirestoreService().getAllUserRatings(userId);
+});

@@ -6,6 +6,8 @@ import 'song_detail_screen.dart';
 import '../providers/spotify_provider.dart';
 
 final _libraryToggleProvider = StateProvider.autoDispose<int>((ref) => 0);
+// null = All, 0 = Unrated, 1-5 = star count
+final _songFilterProvider = StateProvider.autoDispose<int?>((ref) => null);
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
@@ -283,13 +285,115 @@ class _SongListState extends ConsumerState<_SongList> {
     super.dispose();
   }
 
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final activeFilter = ref.watch(_songFilterProvider);
+            final options = <({String label, int? value})>[
+              (label: 'All', value: null),
+              (label: '1★', value: 1),
+              (label: '2★', value: 2),
+              (label: '3★', value: 3),
+              (label: '4★', value: 4),
+              (label: '5★', value: 5),
+              (label: 'Unrated', value: 0),
+            ];
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+                    child: Text(
+                      'Filter by Rating',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ...options.map((opt) {
+                    final selected = activeFilter == opt.value;
+                    return ListTile(
+                      title: Text(
+                        opt.label,
+                        style: TextStyle(
+                          color: selected
+                              ? const Color(0xFF1DB954)
+                              : Colors.white,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      trailing: selected
+                          ? const Icon(Icons.check,
+                              color: Color(0xFF1DB954), size: 18)
+                          : null,
+                      onTap: () {
+                        ref.read(_songFilterProvider.notifier).state =
+                            opt.value;
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(savedTracksProvider);
-    final tracks = state.items;
+    final ratingsAsync = ref.watch(userRatingsProvider);
+    final ratings = ratingsAsync.value ?? {};
+    final activeFilter = ref.watch(_songFilterProvider);
+    final filterActive = activeFilter != null;
+
+    final allTracks = state.items;
+    final tracks = activeFilter == null
+        ? allTracks
+        : allTracks.where((track) {
+            final songId = track['id'] as String?;
+            if (songId == null) return false;
+            final rating = ratings[songId];
+            if (activeFilter == 0) return rating == null;
+            return rating == activeFilter;
+          }).toList();
 
     return Column(
       children: [
+        // Filter bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.filter_list,
+                  color: filterActive
+                      ? const Color(0xFF1DB954)
+                      : Colors.grey,
+                ),
+                onPressed: () => _showFilterSheet(context),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           child: ListView.separated(
             controller: _scrollController,
@@ -306,6 +410,8 @@ class _SongListState extends ConsumerState<_SongList> {
                   '';
               final imageUrl = ((track['album']?['images'] as List?)
                       ?.firstOrNull as Map?)?['url'] as String?;
+              final songId = track['id'] as String?;
+              final rating = songId != null ? ratings[songId] : null;
 
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -331,6 +437,18 @@ class _SongListState extends ConsumerState<_SongList> {
                 subtitle: Text(artistName,
                     style: const TextStyle(
                         color: Colors.grey, fontSize: 13)),
+                trailing: rating != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(
+                          rating,
+                          (_) => const Icon(Icons.star,
+                              color: Color(0xFF1DB954), size: 14),
+                        ),
+                      )
+                    : const Text('unrated',
+                        style:
+                            TextStyle(color: Colors.grey, fontSize: 12)),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
