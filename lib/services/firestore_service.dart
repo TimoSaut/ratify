@@ -1,7 +1,9 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FirestoreService {
   static const String usersCollection = 'users';
+  static const String groupsCollection = 'groups';
   static const String playlistsCollection = 'playlists';
   static const String songsCollection = 'songs';
   static const String ratingsCollection = 'ratings';
@@ -89,6 +91,35 @@ class FirestoreService {
       }
     }
     return result;
+  }
+
+  Future<String> createGroup(
+      String name, String spotifyPlaylistId, String userId) async {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rng = Random.secure();
+    final inviteCode =
+        List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+
+    final doc = await FirebaseFirestore.instance
+        .collection(groupsCollection)
+        .add({
+      'name': name,
+      'spotifyPlaylistId': spotifyPlaylistId,
+      'members': [userId],
+      'inviteCode': inviteCode,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return doc.id;
+  }
+
+  Future<List<Map<String, dynamic>>> getGroupsForUser(String userId) async {
+    final query = await FirebaseFirestore.instance
+        .collection(groupsCollection)
+        .where('members', arrayContains: userId)
+        .get();
+    return query.docs
+        .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
