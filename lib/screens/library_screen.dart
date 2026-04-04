@@ -5,16 +5,14 @@ import 'settings_screen.dart';
 import 'song_detail_screen.dart';
 import '../providers/spotify_provider.dart';
 
-// Tracks which playlist ID is currently being loaded on tap (null = none).
-final _loadingPlaylistIdProvider = StateProvider<String?>((ref) => null);
+final _libraryToggleProvider = StateProvider.autoDispose<int>((ref) => 0);
 
 class LibraryScreen extends ConsumerWidget {
   const LibraryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playlistsAsync = ref.watch(playlistsProvider);
-    final loadingId = ref.watch(_loadingPlaylistIdProvider);
+    final selectedTab = ref.watch(_libraryToggleProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -23,12 +21,10 @@ class LibraryScreen extends ConsumerWidget {
         centerTitle: true,
         elevation: 0,
         leading: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            );
-          },
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
           child: const Padding(
             padding: EdgeInsets.all(8.0),
             child: CircleAvatar(
@@ -38,87 +34,461 @@ class LibraryScreen extends ConsumerWidget {
           ),
         ),
         title: const Text(
-          "Library",
+          'Library',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+              color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Segmented toggle
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF212121),
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Row(
+                children: [
+                  _ToggleButton(
+                    label: 'Albums',
+                    selected: selectedTab == 0,
+                    onTap: () =>
+                        ref.read(_libraryToggleProvider.notifier).state = 0,
+                  ),
+                  _ToggleButton(
+                    label: 'Songs',
+                    selected: selectedTab == 1,
+                    onTap: () =>
+                        ref.read(_libraryToggleProvider.notifier).state = 1,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Content — each view owns its own provider watch
+          Expanded(
+            child: selectedTab == 0
+                ? const _AlbumGrid()
+                : const _SongList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Toggle button ─────────────────────────────────────────────────────────────
+
+class _ToggleButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ToggleButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? Colors.black : Colors.grey,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: playlistsAsync.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: Color(0xFF1DB954)),
-          ),
-          error: (e, _) => Center(
-            child: Text('Failed to load playlists: $e',
-                style: const TextStyle(color: Colors.red)),
-          ),
-          data: (playlists) => ListView.separated(
-            itemCount: playlists.length,
-            separatorBuilder: (_, __) =>
-                const Divider(color: Color(0xFF333333), height: 1),
-            itemBuilder: (context, index) {
-              final playlist = playlists[index];
-              final playlistId = playlist['id'] as String? ?? '';
-              final name = playlist['name'] as String? ?? '';
-              final trackCount =
-                  (playlist['tracks']?['total'] as int?) ?? 0;
-              final isLoading = loadingId == playlistId;
+    );
+  }
+}
 
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.queue_music,
-                    color: Color(0xFF1DB954)),
-                title: Text(name,
-                    style: const TextStyle(color: Colors.white)),
-                subtitle: Text('$trackCount tracks',
-                    style: const TextStyle(color: Colors.grey)),
-                trailing: isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF1DB954)),
-                      )
-                    : const Icon(Icons.chevron_right, color: Colors.grey),
-                onTap: isLoading
-                    ? null
-                    : () async {
-                        ref
-                            .read(_loadingPlaylistIdProvider.notifier)
-                            .state = playlistId;
-                        try {
-                          final items = await ref.read(
-                            playlistTracksProvider(playlistId).future,
-                          );
-                          final track = items
-                              .map((item) =>
-                                  item['track'] as Map<String, dynamic>?)
-                              .whereType<Map<String, dynamic>>()
-                              .firstOrNull;
-                          if (track != null && context.mounted) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    SongDetailScreen(track: track),
+// ── Album grid (derived from savedTracksProvider) ─────────────────────────────
+
+class _AlbumGrid extends ConsumerStatefulWidget {
+  const _AlbumGrid();
+
+  @override
+  ConsumerState<_AlbumGrid> createState() => _AlbumGridState();
+}
+
+class _AlbumGridState extends ConsumerState<_AlbumGrid> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      ref.read(savedTracksProvider.notifier).loadMore();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tracksState = ref.watch(savedTracksProvider);
+    final allTracks = tracksState.items;
+
+    // Derive unique albums from loaded tracks, preserving first-seen order.
+    final seenIds = <String>{};
+    final albums = <Map<String, dynamic>>[];
+    for (final track in allTracks) {
+      final album = track['album'] as Map<String, dynamic>?;
+      if (album == null) continue;
+      final id = album['id'] as String?;
+      if (id == null || !seenIds.add(id)) continue;
+      albums.add(album);
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: GridView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.75,
+            ),
+            itemCount: albums.length,
+            itemBuilder: (context, index) {
+              final album = albums[index];
+              final albumId = album['id'] as String? ?? '';
+              final name = album['name'] as String? ?? '';
+              final artist = (album['artists'] as List?)
+                      ?.firstOrNull?['name'] as String? ??
+                  '';
+              final imageUrl = (album['images'] as List?)
+                  ?.firstOrNull?['url'] as String?;
+
+              return GestureDetector(
+                onTap: () {
+                  final albumTracks = allTracks
+                      .where((t) =>
+                          (t['album'] as Map?)?['id'] == albumId)
+                      .toList();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => _AlbumTracksScreen(
+                        album: album,
+                        tracks: albumTracks,
+                      ),
+                    ),
+                  );
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: imageUrl != null
+                            ? Image.network(imageUrl,
+                                fit: BoxFit.cover, width: double.infinity)
+                            : Container(
+                                color: const Color(0xFF212121),
+                                child: const Center(
+                                  child: Icon(Icons.album,
+                                      color: Colors.grey, size: 40),
+                                ),
                               ),
-                            );
-                          }
-                        } finally {
-                          ref
-                              .read(_loadingPlaylistIdProvider.notifier)
-                              .state = null;
-                        }
-                      },
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 13)),
+                    Text(artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
               );
             },
           ),
         ),
+        if (tracksState.isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: CircularProgressIndicator(color: Color(0xFF1DB954)),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Song list (savedTracksProvider, paginated) ────────────────────────────────
+
+class _SongList extends ConsumerStatefulWidget {
+  const _SongList();
+
+  @override
+  ConsumerState<_SongList> createState() => _SongListState();
+}
+
+class _SongListState extends ConsumerState<_SongList> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 200) {
+      ref.read(savedTracksProvider.notifier).loadMore();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(savedTracksProvider);
+    final tracks = state.items;
+
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.separated(
+            controller: _scrollController,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: tracks.length,
+            separatorBuilder: (_, __) =>
+                const Divider(color: Color(0xFF2A2A2A), height: 1),
+            itemBuilder: (context, index) {
+              final track = tracks[index];
+              final trackName = track['name'] as String? ?? '';
+              final artistName = (track['artists'] as List?)
+                      ?.firstOrNull?['name'] as String? ??
+                  '';
+              final imageUrl = ((track['album']?['images'] as List?)
+                      ?.firstOrNull as Map?)?['url'] as String?;
+
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                    vertical: 4, horizontal: 0),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: imageUrl != null
+                      ? Image.network(imageUrl,
+                          width: 40, height: 40, fit: BoxFit.cover)
+                      : Container(
+                          width: 40,
+                          height: 40,
+                          color: const Color(0xFF212121),
+                          child: const Icon(Icons.music_note,
+                              color: Colors.grey, size: 20),
+                        ),
+                ),
+                title: Text(trackName,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                subtitle: Text(artistName,
+                    style: const TextStyle(
+                        color: Colors.grey, fontSize: 13)),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SongDetailScreen(track: track),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (state.isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: CircularProgressIndicator(color: Color(0xFF1DB954)),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Album tracks screen ───────────────────────────────────────────────────────
+
+class _AlbumTracksScreen extends StatelessWidget {
+  final Map<String, dynamic> album;
+  final List<Map<String, dynamic>> tracks;
+
+  const _AlbumTracksScreen({
+    required this.album,
+    required this.tracks,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final albumName = album['name'] as String? ?? '';
+    final artist =
+        (album['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
+    final imageUrl =
+        (album['images'] as List?)?.firstOrNull?['url'] as String?;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          albumName,
+          style: const TextStyle(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Album header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                if (imageUrl != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(imageUrl,
+                        width: 72, height: 72, fit: BoxFit.cover),
+                  )
+                else
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF212121),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.album,
+                        color: Colors.grey, size: 36),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(albumName,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 4),
+                      Text(artist,
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: Color(0xFF2A2A2A), height: 1),
+
+          // Track list — full track objects from savedTracksProvider,
+          // already contain album data so no enrichment needed.
+          Expanded(
+            child: tracks.isEmpty
+                ? const Center(
+                    child: Text('No liked songs from this album',
+                        style: TextStyle(color: Colors.grey)),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    itemCount: tracks.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(color: Color(0xFF2A2A2A), height: 1),
+                    itemBuilder: (context, index) {
+                      final track = tracks[index];
+                      final trackName = track['name'] as String? ?? '';
+                      final trackArtist = (track['artists'] as List?)
+                              ?.firstOrNull?['name'] as String? ??
+                          artist;
+                      final trackImageUrl =
+                          ((track['album']?['images'] as List?)
+                                  ?.firstOrNull as Map?)?['url'] as String?;
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 0),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: trackImageUrl != null
+                              ? Image.network(trackImageUrl,
+                                  width: 40, height: 40, fit: BoxFit.cover)
+                              : Container(
+                                  width: 40,
+                                  height: 40,
+                                  color: const Color(0xFF212121),
+                                  child: const Icon(Icons.music_note,
+                                      color: Colors.grey, size: 20),
+                                ),
+                        ),
+                        title: Text(trackName,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 15),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        subtitle: Text(trackArtist,
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 13)),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SongDetailScreen(track: track),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }

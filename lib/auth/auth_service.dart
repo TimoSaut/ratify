@@ -12,7 +12,7 @@ class AuthService {
 
   static const clientId = "f58b9e4fc6ec4df3ad283efe8cc5f9c9";
   static const redirectUri = "com.rateify.app://callback";
-  static const scopes = "user-read-email playlist-modify-public";
+  static const scopes = "user-read-email playlist-modify-public user-library-read";
 
   Future<void> login() async {
     final codeVerifier = _generateCodeVerifier();
