@@ -28,6 +28,28 @@ class SongDetailScreen extends ConsumerWidget {
     final submitState = ref.watch(songDetailProvider);
     final selectedRating = ref.watch(selectedRatingProvider);
 
+    final trackName = track['name'] as String? ?? '';
+    final artistName =
+        (track['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
+    final imageUrl =
+        ((track['album']?['images'] as List?)?.firstOrNull
+            as Map?)?['url'] as String?;
+    final String? songId = track['id'] as String?;
+
+    final existingRatingAsync =
+        songId != null ? ref.watch(existingRatingProvider(songId)) : null;
+
+    // Pre-fill stars once existing rating loads
+    ref.listen<AsyncValue<int?>>(
+      existingRatingProvider(songId ?? ''),
+      (_, state) {
+        final rating = state.value;
+        if (rating != null && rating > 0) {
+          ref.read(selectedRatingProvider.notifier).state = rating;
+        }
+      },
+    );
+
     ref.listen<AsyncValue<void>>(songDetailProvider, (_, state) {
       if (state is AsyncData) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -40,13 +62,8 @@ class SongDetailScreen extends ConsumerWidget {
       }
     });
 
-    final trackName = track['name'] as String? ?? '';
-    final artistName =
-        (track['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
-    final imageUrl =
-        ((track['album']?['images'] as List?)?.firstOrNull
-            as Map?)?['url'] as String?;
-    final String? songId = track['id'] as String?;
+    final existingRating = existingRatingAsync?.value;
+    final isAlreadyRated = existingRating != null && existingRating > 0;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -127,6 +144,23 @@ class SongDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 32),
 
+            // Existing rating label
+            if (existingRatingAsync == null || existingRatingAsync.isLoading)
+              const SizedBox(
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF1DB954)),
+              )
+            else if (isAlreadyRated)
+              Text(
+                'You rated this song $existingRating★',
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              )
+            else
+              const SizedBox.shrink(),
+
+            const SizedBox(height: 12),
+
             // Star rating row
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -170,7 +204,11 @@ class SongDetailScreen extends ConsumerWidget {
                               .read(songDetailProvider.notifier)
                               .submitRating(songId, '', selectedRating),
                       child: Text(
-                        selectedRating == 0 ? 'Select a rating' : 'Submit Rating',
+                        selectedRating == 0
+                            ? 'Select a rating'
+                            : isAlreadyRated
+                                ? 'Update Rating'
+                                : 'Submit Rating',
                         style: const TextStyle(
                             color: Colors.white, fontSize: 16),
                       ),

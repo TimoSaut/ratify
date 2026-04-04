@@ -22,7 +22,14 @@ class SongDetailNotifier extends AsyncNotifier<void> {
       if (realUserId == null || realUserId.isEmpty) {
         throw Exception('Spotify user ID is missing');
       }
-      await FirestoreService().submitRating(songId, realUserId, rating);
+      final existingRating =
+          await ref.read(existingRatingProvider(songId).future);
+      if (existingRating != null) {
+        await FirestoreService().updateRating(songId, realUserId, rating);
+      } else {
+        await FirestoreService().submitRating(songId, realUserId, rating);
+      }
+      ref.invalidate(existingRatingProvider(songId));
     });
   }
 }
@@ -30,3 +37,11 @@ class SongDetailNotifier extends AsyncNotifier<void> {
 final songDetailProvider = AsyncNotifierProvider<SongDetailNotifier, void>(
   SongDetailNotifier.new,
 );
+
+final existingRatingProvider =
+    FutureProvider.autoDispose.family<int?, String>((ref, songId) async {
+  final userAsync = ref.watch(userProvider);
+  final userId = userAsync.value?['id'] as String?;
+  if (userId == null) return null;
+  return FirestoreService().getUserRatingForSong(songId, userId);
+});

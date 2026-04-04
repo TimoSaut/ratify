@@ -35,6 +35,45 @@ class FirestoreService {
     }
   }
 
+  Future<int?> getUserRatingForSong(String songId, String userId) async {
+    final query = await FirebaseFirestore.instance
+        .collection(ratingsCollection)
+        .where('songId', isEqualTo: songId)
+        .where('userId', isEqualTo: userId)
+        .limit(1)
+        .get();
+    if (query.docs.isEmpty) return null;
+    return query.docs.first.data()['rating'] as int?;
+  }
+
+  Future<void> updateRating(
+      String songId, String userId, int rating) async {
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection(ratingsCollection)
+          .where('songId', isEqualTo: songId)
+          .where('userId', isEqualTo: userId)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        await query.docs.first.reference.update({
+          'rating': rating,
+          'timestamp': DateTime.now(),
+        });
+      } else {
+        await FirebaseFirestore.instance.collection(ratingsCollection).add({
+          'songId': songId,
+          'userId': userId,
+          'rating': rating,
+          'timestamp': DateTime.now(),
+        });
+      }
+    } catch (e) {
+      print('updateRating error: $e');
+      rethrow;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
     // TODO: implement getPendingVotes
     print('TODO: getPendingVotes songId=$songId');
