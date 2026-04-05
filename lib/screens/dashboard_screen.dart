@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'settings_screen.dart';
+import 'groups_screen.dart';
 import '../providers/spotify_provider.dart';
+import '../providers/navigation_provider.dart';
+import '../services/firestore_service.dart';
+
+final _homeGroupsProvider =
+    FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final userId = ref.watch(userProvider).value?['id'] as String?;
+  if (userId == null) return [];
+  return FirestoreService().getGroupsForUser(userId);
+});
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -11,6 +21,7 @@ class DashboardScreen extends ConsumerWidget {
     final userAsync = ref.watch(userProvider);
     final profileImageUrl =
         userAsync.value?['images']?.first?['url'] as String?;
+    final groupsAsync = ref.watch(_homeGroupsProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -48,7 +59,7 @@ class DashboardScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Greeting
+            // ── Greeting ────────────────────────────────────────────────────
             userAsync.when(
               loading: () => const SizedBox(
                 height: 36,
@@ -78,7 +89,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
 
-            // ── Pending Votes ───────────────────────────────────────────────
+            // ── Pending Votes ────────────────────────────────────────────────
             const Text(
               'Pending Votes',
               style: TextStyle(
@@ -89,7 +100,8 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1A1A),
                 borderRadius: BorderRadius.circular(16),
@@ -114,73 +126,160 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 32),
 
-            // ── Your Stats ──────────────────────────────────────────────────
+            // ── Recent Activity ──────────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Activity',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold),
+                ),
+                TextButton(
+                  onPressed: () => ref
+                      .read(navigationIndexProvider.notifier)
+                      .state = 1,
+                  child: const Text(
+                    'Show all →',
+                    style:
+                        TextStyle(color: Color(0xFF1DB954), fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF2A2A2A)),
+              ),
+              child: const Text(
+                'No activity yet',
+                style: TextStyle(color: Colors.grey, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // ── Your Groups ──────────────────────────────────────────────────
             const Text(
-              'Your Stats',
+              'Your Groups',
               style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                const Expanded(child: _StatCard(value: '0', label: 'Songs Rated')),
-                const SizedBox(width: 12),
-                const Expanded(child: _StatCard(value: '0', label: 'Open Votes')),
-              ],
+            groupsAsync.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: CircularProgressIndicator(
+                      color: Color(0xFF1DB954)),
+                ),
+              ),
+              error: (e, _) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('Error: $e',
+                    style: const TextStyle(color: Colors.grey)),
+              ),
+              data: (groups) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (groups.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 28, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(16),
+                        border:
+                            Border.all(color: const Color(0xFF2A2A2A)),
+                      ),
+                      child: const Text(
+                        'No groups yet',
+                        style:
+                            TextStyle(color: Colors.grey, fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else
+                    ...groups.map((group) {
+                      final name = group['name'] as String? ?? '';
+                      final inviteCode =
+                          group['inviteCode'] as String? ?? '';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: const Color(0xFF2A2A2A)),
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 20,
+                              backgroundColor: Color(0xFF1DB954),
+                              child: Icon(Icons.group,
+                                  color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  inviteCode,
+                                  style: const TextStyle(
+                                      color: Colors.grey,
+                                      fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 4),
+                  TextButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const GroupsScreen()),
+                    ),
+                    icon: const Icon(Icons.add,
+                        color: Color(0xFF1DB954), size: 18),
+                    label: const Text(
+                      'Create Group',
+                      style: TextStyle(
+                          color: Color(0xFF1DB954), fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Expanded(child: _StatCard(value: '0', label: 'Proposed Songs')),
-                const SizedBox(width: 12),
-                const Expanded(child: _StatCard(value: '0%', label: 'Acceptance Rate')),
-              ],
-            ),
+            const SizedBox(height: 16),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _StatCard({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 13,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
       ),
     );
   }
