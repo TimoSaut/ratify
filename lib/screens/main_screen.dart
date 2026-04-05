@@ -43,11 +43,11 @@ class MainScreen extends ConsumerWidget {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard),
-            label: "Dashboard",
+            label: "Home",
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.timeline),
-            label: "Activity",
+            icon: Icon(Icons.library_music),
+            label: "Playlists",
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note),

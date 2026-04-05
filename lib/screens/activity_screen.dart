@@ -72,7 +72,7 @@ class ActivityScreen extends ConsumerWidget {
           ),
         ),
         title: const Text(
-          "Activity",
+          "Playlists",
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,

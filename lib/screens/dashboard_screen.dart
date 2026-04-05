@@ -38,7 +38,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
         title: const Text(
-          'Dashboard',
+          'Home',
           style: TextStyle(
               color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
