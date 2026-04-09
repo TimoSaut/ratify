@@ -20,7 +20,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(userProvider);
     final profileImageUrl =
-        userAsync.value?['images']?.first?['url'] as String?;
+        (userAsync.value?['images'] as List?)?.firstOrNull?['url'] as String?;
     final groupsAsync = ref.watch(_homeGroupsProvider);
 
     return Scaffold(
