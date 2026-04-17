@@ -25,7 +25,7 @@ final _spotifyPlaylistsProvider =
 
 class _Section2Notifier extends Notifier<bool> {
   @override
-  bool build() => true;
+  bool build() => false;
   void toggle() => state = !state;
 }
 
@@ -201,20 +201,12 @@ class ActivityScreen extends ConsumerWidget {
           ),
           if (isExpanded) ...[
             const SizedBox(height: 12),
-            Opacity(
-              opacity: 0.6,
-              child: Column(
-                children: unlinked
-                    .map((playlist) => _SpotifyPlaylistCard(
-                          playlist: playlist,
-                          onAdd: userId == null
-                              ? null
-                              : () => _addPlaylist(
-                                  context, ref, playlist, userId),
-                        ))
-                    .toList(),
-              ),
-            ),
+            ...unlinked.map((playlist) => _SpotifyPlaylistCard(
+                  playlist: playlist,
+                  onAdd: userId == null
+                      ? null
+                      : () => _addPlaylist(context, ref, playlist, userId),
+                )),
           ],
           const SizedBox(height: 16),
         ],
@@ -222,14 +214,15 @@ class ActivityScreen extends ConsumerWidget {
         // ── Bottom button ─────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF1DB954),
-              side: const BorderSide(color: Color(0xFF1DB954)),
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1DB954),
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(30),
               ),
+              elevation: 0,
             ),
             icon: const Icon(Icons.add),
             label: const Text(
@@ -336,32 +329,72 @@ class _GroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = group['name'] as String? ?? 'Untitled';
+    final memberCount = (group['members'] as List?)?.length ?? 0;
+    final memberLabel =
+        '$memberCount ${memberCount == 1 ? 'member' : 'members'}';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.grey[900],
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle,
-                  color: Color(0xFF1DB954), size: 28),
+              // Cover art placeholder with green checkmark badge
+              Stack(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1DB954).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.library_music,
+                        color: Color(0xFF1DB954), size: 28),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.black,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_circle,
+                          color: Color(0xFF1DB954), size: 20),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(width: 14),
               Expanded(
-                child: Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      memberLabel,
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
               const Icon(Icons.chevron_right,
@@ -401,17 +434,21 @@ class _SpotifyPlaylistCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: coverUrl != null
-                  ? Image.network(
-                      coverUrl,
-                      width: 48,
-                      height: 48,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(),
-                    )
-                  : _placeholder(),
+            // Cover art greyed out
+            Opacity(
+              opacity: 0.4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: coverUrl != null
+                    ? Image.network(
+                        coverUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _placeholder(),
+                      )
+                    : _placeholder(),
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -422,13 +459,13 @@ class _SpotifyPlaylistCard extends StatelessWidget {
                     name,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     ownerName,
                     style: const TextStyle(
@@ -452,14 +489,14 @@ class _SpotifyPlaylistCard extends StatelessWidget {
 
   Widget _placeholder() {
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
         color: const Color(0xFF1DB954).withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: const Icon(Icons.library_music,
-          color: Color(0xFF1DB954), size: 24),
+          color: Color(0xFF1DB954), size: 28),
     );
   }
 }
