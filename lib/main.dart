@@ -1,10 +1,14 @@
+import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/main_screen.dart';
 import 'auth/token_storage.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'providers/spotify_provider.dart';
+import 'services/firestore_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,21 +17,106 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
+
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<Uri>? _linkSub;
+  String? _pendingInviteCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    final appLinks = AppLinks();
+
+    // Link that launched the app from terminated state
+    final initialLink = await appLinks.getInitialLink();
+    if (initialLink != null) {
+      _handleLink(initialLink);
+    }
+
+    // Links while app is running (foreground / background)
+    _linkSub = appLinks.uriLinkStream.listen(_handleLink);
+  }
+
+  void _handleLink(Uri uri) {
+    if (uri.scheme != 'rateify' || uri.host != 'join') return;
+    if (uri.pathSegments.isEmpty) return;
+    final inviteCode = uri.pathSegments.first;
+
+    final userId = ref.read(userProvider).value?['id'] as String?;
+    if (userId == null) {
+      // User not yet loaded — store and process once logged in
+      _pendingInviteCode = inviteCode;
+      return;
+    }
+    _joinGroup(inviteCode, userId);
+  }
+
+  Future<void> _joinGroup(String inviteCode, String userId) async {
+    try {
+      await FirestoreService().joinGroup(inviteCode, userId);
+
+      // Bring user to the Playlists tab (MainScreen)
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+        (route) => false,
+      );
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _navigatorKey.currentContext;
+        if (ctx == null) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(
+            content: Text('You joined the group successfully!'),
+            backgroundColor: Color(0xFF1DB954),
+          ),
+        );
+      });
+    } catch (e) {
+      final ctx = _navigatorKey.currentContext;
+      if (ctx == null) return;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text('Could not join group: $e')),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
 
   Future<Widget> _getInitialScreen() async {
     final tokenStorage = TokenStorage();
     final accessToken = await tokenStorage.getAccessToken();
-    if (accessToken != null) {
-      return const MainScreen();
-    }
-    return const WelcomeScreen();
+    return accessToken != null ? const MainScreen() : const WelcomeScreen();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Process a pending invite code once the user provider resolves
+    ref.listen<AsyncValue<Map<String, dynamic>>>(userProvider, (_, next) {
+      final userId = next.value?['id'] as String?;
+      if (_pendingInviteCode != null && userId != null) {
+        final code = _pendingInviteCode!;
+        _pendingInviteCode = null;
+        _joinGroup(code, userId);
+      }
+    });
+
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Rateify',
       theme: ThemeData.dark(),
       home: FutureBuilder<Widget>(
@@ -37,9 +126,8 @@ class MyApp extends StatelessWidget {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
-          } else {
-            return snapshot.data!;
           }
+          return snapshot.data!;
         },
       ),
     );
