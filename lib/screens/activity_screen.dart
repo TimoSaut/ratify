@@ -158,10 +158,10 @@ class ActivityScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           ...groups.map((group) => _GroupCard(
                 group: group,
-                onTap: () {
+                onTap: () async {
                   final name = group['name'] as String? ?? 'Untitled';
                   final id = group['id'] as String? ?? '';
-                  Navigator.push(
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => GroupDetailScreen(
@@ -170,6 +170,8 @@ class ActivityScreen extends ConsumerWidget {
                       ),
                     ),
                   );
+                  ref.invalidate(_rateifyGroupsProvider);
+                  ref.invalidate(_spotifyPlaylistsProvider);
                 },
               )),
           const SizedBox(height: 16),
@@ -252,6 +254,7 @@ class ActivityScreen extends ConsumerWidget {
       final groupId = await _createGroup(name, spotifyId, userId);
       final inviteCode = await _getInviteCode(groupId);
       ref.invalidate(_rateifyGroupsProvider);
+      ref.invalidate(_spotifyPlaylistsProvider);
       if (!context.mounted) return;
       await _shareInviteLink(context, inviteCode);
     } catch (e) {
@@ -302,6 +305,7 @@ class ActivityScreen extends ConsumerWidget {
                 final groupId = await _createGroup(name, '', userId);
                 final inviteCode = await _getInviteCode(groupId);
                 ref.invalidate(_rateifyGroupsProvider);
+                ref.invalidate(_spotifyPlaylistsProvider);
                 if (!context.mounted) return;
                 await _shareInviteLink(context, inviteCode);
               } catch (e) {
