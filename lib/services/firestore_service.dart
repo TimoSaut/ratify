@@ -142,6 +142,24 @@ class FirestoreService {
         .toList();
   }
 
+  Future<void> leaveGroup(String groupId, String userId) async {
+    final ref = FirebaseFirestore.instance
+        .collection(groupsCollection)
+        .doc(groupId);
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final doc = await transaction.get(ref);
+      if (!doc.exists) return;
+      final members =
+          List<String>.from(doc.data()?['members'] as List? ?? []);
+      members.remove(userId);
+      if (members.isEmpty) {
+        transaction.delete(ref);
+      } else {
+        transaction.update(ref, {'members': members});
+      }
+    });
+  }
+
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
     // TODO: implement getPendingVotes
     print('TODO: getPendingVotes songId=$songId');

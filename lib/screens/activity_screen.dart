@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'settings_screen.dart';
+import 'group_detail_screen.dart';
 import '../providers/spotify_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/spotify_service.dart';
@@ -497,42 +498,6 @@ class _SpotifyPlaylistCard extends StatelessWidget {
       ),
       child: const Icon(Icons.library_music,
           color: Color(0xFF1DB954), size: 28),
-    );
-  }
-}
-
-// ── GroupDetailScreen (stub) ──────────────────────────────────────────────────
-
-class GroupDetailScreen extends StatelessWidget {
-  final String groupId;
-  final String playlistName;
-
-  const GroupDetailScreen({
-    super.key,
-    required this.groupId,
-    required this.playlistName,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
-        title: Text(
-          playlistName,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Center(
-        child: Text(
-          'Group ID: $groupId',
-          style: const TextStyle(color: Colors.grey),
-        ),
-      ),
     );
   }
 }
