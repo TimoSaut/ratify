@@ -281,4 +281,64 @@ class FirestoreService {
     print('TODO: getPendingVotes songId=$songId');
     return [];
   }
+
+  /// Returns pending votes (status == 'pending') across the given groups
+  /// where [userId] has NOT yet cast a vote.
+  Future<List<Map<String, dynamic>>> getPendingVotesForUser(
+      String userId, List<String> groupIds) async {
+    if (groupIds.isEmpty) return [];
+
+    final results = <Map<String, dynamic>>[];
+    // Firestore whereIn supports at most 30 values per call
+    for (var i = 0; i < groupIds.length; i += 30) {
+      final chunk = groupIds.sublist(
+          i, (i + 30) < groupIds.length ? i + 30 : groupIds.length);
+      final snapshot = await FirebaseFirestore.instance
+          .collection(pendingVotesCollection)
+          .where('groupId', whereIn: chunk)
+          .where('status', isEqualTo: 'pending')
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final ratings = data['ratings'];
+        // Only include votes the current user hasn't rated yet
+        if (ratings is Map && ratings.containsKey(userId)) continue;
+        results.add({'id': doc.id, ...data});
+      }
+    }
+    return results;
+  }
+
+  /// Returns the 10 most-recently resolved votes (accepted or rejected)
+  /// across the given groups, ordered newest first.
+  Future<List<Map<String, dynamic>>> getRecentActivityForUser(
+      List<String> groupIds) async {
+    if (groupIds.isEmpty) return [];
+
+    final results = <Map<String, dynamic>>[];
+    for (var i = 0; i < groupIds.length; i += 30) {
+      final chunk = groupIds.sublist(
+          i, (i + 30) < groupIds.length ? i + 30 : groupIds.length);
+      final snapshot = await FirebaseFirestore.instance
+          .collection(pendingVotesCollection)
+          .where('groupId', whereIn: chunk)
+          .where('status', whereIn: ['accepted', 'rejected'])
+          .orderBy('proposedAt', descending: true)
+          .limit(10)
+          .get();
+      for (final doc in snapshot.docs) {
+        results.add({'id': doc.id, ...doc.data()});
+      }
+    }
+    // Re-sort and re-limit in case we fetched multiple chunks
+    results.sort((a, b) {
+      final aTs = a['proposedAt'] as Timestamp?;
+      final bTs = b['proposedAt'] as Timestamp?;
+      if (aTs == null && bTs == null) return 0;
+      if (aTs == null) return 1;
+      if (bTs == null) return -1;
+      return bTs.compareTo(aTs);
+    });
+    return results.take(10).toList();
+  }
 }
