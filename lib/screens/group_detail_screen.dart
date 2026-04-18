@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
-import 'library_screen.dart';
 import '../providers/spotify_provider.dart';
+import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
+import '../services/spotify_service.dart';
 
-// ── Provider ──────────────────────────────────────────────────────────────────
+// ── Providers ──────────────────────────────────────────────────────────────────
 
 final _groupDetailProvider = FutureProvider.autoDispose
     .family<Map<String, dynamic>?, String>((ref, groupId) async {
@@ -18,16 +19,37 @@ final _groupDetailProvider = FutureProvider.autoDispose
   return {'id': doc.id, ...doc.data()!};
 });
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+final _playlistTracksProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, playlistId) async {
+  if (playlistId.isEmpty) return [];
+  final authService = ref.read(authServiceProvider);
+  return SpotifyService(authService: authService).getPlaylistTracks(playlistId);
+});
+
+final _pendingVotesForGroupProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, groupId) async {
+  if (groupId.isEmpty) return [];
+  final query = await FirebaseFirestore.instance
+      .collection('pendingVotes')
+      .where('groupId', isEqualTo: groupId)
+      .get();
+  return query.docs
+      .map((doc) => {'id': doc.id, ...doc.data()})
+      .toList();
+});
+
+// ── Screen ─────────────────────────────────────────────────────────────────────
 
 class GroupDetailScreen extends ConsumerWidget {
   final String groupId;
   final String playlistName;
+  final String? coverUrl;
 
   const GroupDetailScreen({
     super.key,
     required this.groupId,
     required this.playlistName,
+    this.coverUrl,
   });
 
   @override
@@ -62,23 +84,24 @@ class GroupDetailScreen extends ConsumerWidget {
                   style: TextStyle(color: Colors.grey)),
             );
           }
-          return _GroupDetailBody(group: group, userId: userId);
+          return _GroupDetailBody(group: group, userId: userId, coverUrl: coverUrl);
         },
       ),
     );
   }
 }
 
-// ── Body ──────────────────────────────────────────────────────────────────────
+// ── Body ───────────────────────────────────────────────────────────────────────
 
-class _GroupDetailBody extends StatelessWidget {
+class _GroupDetailBody extends ConsumerWidget {
   final Map<String, dynamic> group;
   final String? userId;
+  final String? coverUrl;
 
-  const _GroupDetailBody({required this.group, required this.userId});
+  const _GroupDetailBody({required this.group, required this.userId, this.coverUrl});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = group['name'] as String? ?? 'Untitled';
     final groupId = group['id'] as String? ?? '';
     final members = (group['members'] as List?)
@@ -86,15 +109,31 @@ class _GroupDetailBody extends StatelessWidget {
             .toList() ??
         [];
     final inviteCode = group['inviteCode'] as String? ?? '';
+    final spotifyPlaylistId = group['spotifyPlaylistId'] as String? ?? '';
+
+    final tracksAsync = ref.watch(_playlistTracksProvider(spotifyPlaylistId));
+    final votesAsync = ref.watch(_pendingVotesForGroupProvider(groupId));
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       children: [
-        // ── Header ───────────────────────────────────────────────────────
-        _PlaylistHeader(name: name, memberCount: members.length),
+        // ── Header ─────────────────────────────────────────────────────────
+        _PlaylistHeader(
+          name: name,
+          memberCount: members.length,
+          coverUrl: group['coverUrl'] as String? ?? coverUrl,
+        ),
+        const SizedBox(height: 16),
+
+        // ── Propose a Song ─────────────────────────────────────────────────
+        _ProposeSongButton(
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Coming soon!')),
+          ),
+        ),
         const SizedBox(height: 28),
 
-        // ── Members ──────────────────────────────────────────────────────
+        // ── Members ────────────────────────────────────────────────────────
         _sectionTitle('Members'),
         const SizedBox(height: 12),
         _MembersRow(members: members),
@@ -102,26 +141,19 @@ class _GroupDetailBody extends StatelessWidget {
         _InviteButton(inviteCode: inviteCode),
         const SizedBox(height: 28),
 
-        // ── Pending Votes ─────────────────────────────────────────────────
+        // ── Songs in Playlist ──────────────────────────────────────────────
+        _sectionTitle('Songs in Playlist'),
+        const SizedBox(height: 12),
+        _buildTracksSection(tracksAsync, spotifyPlaylistId),
+        const SizedBox(height: 28),
+
+        // ── Pending Votes ──────────────────────────────────────────────────
         _sectionTitle('Pending Votes'),
         const SizedBox(height: 12),
-        _emptyCard('No pending votes yet'),
-        const SizedBox(height: 12),
-        _ProposeSongButton(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const LibraryScreen()),
-          ),
-        ),
+        _buildVotesSection(votesAsync),
         const SizedBox(height: 28),
 
-        // ── Recent Activity ───────────────────────────────────────────────
-        _sectionTitle('Recent Activity'),
-        const SizedBox(height: 12),
-        _emptyCard('No activity yet'),
-        const SizedBox(height: 28),
-
-        // ── Leave Group ───────────────────────────────────────────────────
+        // ── Leave Group ────────────────────────────────────────────────────
         if (userId != null)
           _LeaveGroupButton(groupId: groupId, userId: userId!),
         const SizedBox(height: 24),
@@ -155,15 +187,61 @@ class _GroupDetailBody extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildTracksSection(
+    AsyncValue<List<Map<String, dynamic>>> tracksAsync,
+    String spotifyPlaylistId,
+  ) {
+    if (spotifyPlaylistId.isEmpty) {
+      return _emptyCard('No Spotify playlist linked');
+    }
+    return tracksAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+            child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+      ),
+      error: (e, _) => _emptyCard('Could not load songs'),
+      data: (items) {
+        final validItems = items
+            .where((item) => item['track'] != null)
+            .toList();
+        if (validItems.isEmpty) return _emptyCard('No songs in playlist yet');
+        return Column(
+          children: validItems.map((item) => _TrackRow(item: item)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildVotesSection(
+      AsyncValue<List<Map<String, dynamic>>> votesAsync) {
+    return votesAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+            child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+      ),
+      error: (e, _) => _emptyCard('Could not load votes'),
+      data: (votes) {
+        if (votes.isEmpty) return _emptyCard('No pending votes yet');
+        return Column(
+          children:
+              votes.map((vote) => _PendingVoteRow(vote: vote)).toList(),
+        );
+      },
+    );
+  }
 }
 
-// ── Header ────────────────────────────────────────────────────────────────────
+// ── Header ─────────────────────────────────────────────────────────────────────
 
 class _PlaylistHeader extends StatelessWidget {
   final String name;
   final int memberCount;
+  final String? coverUrl;
 
-  const _PlaylistHeader({required this.name, required this.memberCount});
+  const _PlaylistHeader({required this.name, required this.memberCount, this.coverUrl});
 
   @override
   Widget build(BuildContext context) {
@@ -172,19 +250,17 @@ class _PlaylistHeader extends StatelessWidget {
 
     return Column(
       children: [
-        // Cover art placeholder
-        Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1DB954).withOpacity(0.15),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(
-            Icons.library_music,
-            color: Color(0xFF1DB954),
-            size: 52,
-          ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: coverUrl != null
+              ? Image.network(
+                  coverUrl!,
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _coverPlaceholder(),
+                )
+              : _coverPlaceholder(),
         ),
         const SizedBox(height: 16),
         Text(
@@ -206,9 +282,25 @@ class _PlaylistHeader extends StatelessWidget {
       ],
     );
   }
+
+  Widget _coverPlaceholder() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1DB954).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Icon(
+        Icons.library_music,
+        color: Color(0xFF1DB954),
+        size: 52,
+      ),
+    );
+  }
 }
 
-// ── Members row ───────────────────────────────────────────────────────────────
+// ── Members row ────────────────────────────────────────────────────────────────
 
 class _MembersRow extends StatelessWidget {
   final List<String> members;
@@ -258,10 +350,7 @@ class _MemberAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Members are stored as Spotify user IDs; no display name available yet.
-    // Show a placeholder avatar with the first character of the ID.
-    final initial =
-        userId.isNotEmpty ? userId[0].toUpperCase() : '?';
+    final initial = userId.isNotEmpty ? userId[0].toUpperCase() : '?';
 
     return Container(
       width: 44,
@@ -285,7 +374,7 @@ class _MemberAvatar extends StatelessWidget {
   }
 }
 
-// ── Invite button ─────────────────────────────────────────────────────────────
+// ── Invite button ──────────────────────────────────────────────────────────────
 
 class _InviteButton extends StatelessWidget {
   final String inviteCode;
@@ -327,7 +416,235 @@ class _InviteButton extends StatelessWidget {
   }
 }
 
-// ── Leave group button ────────────────────────────────────────────────────────
+// ── Propose song button ────────────────────────────────────────────────────────
+
+class _ProposeSongButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ProposeSongButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1DB954),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          elevation: 0,
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'Propose a Song',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        onPressed: onTap,
+      ),
+    );
+  }
+}
+
+// ── Track row ─────────────────────────────────────────────────────────────────
+
+class _TrackRow extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _TrackRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final track = item['track'] as Map<String, dynamic>;
+    final addedBy = item['added_by'] as Map<String, dynamic>?;
+    final addedById = addedBy?['id'] as String?;
+
+    final name = track['name'] as String? ?? 'Unknown';
+    final artists = track['artists'];
+    final firstArtist =
+        (artists is List && artists.isNotEmpty) ? artists.first : null;
+    final artistName = (firstArtist is Map)
+        ? firstArtist['name'] as String? ?? 'Unknown'
+        : 'Unknown';
+
+    final album = track['album'];
+    final albumImages = (album is Map) ? album['images'] : null;
+    final firstImage = (albumImages is List && albumImages.isNotEmpty)
+        ? albumImages.first
+        : null;
+    final imageUrl =
+        (firstImage is Map) ? firstImage['url'] as String? : null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: imageUrl != null
+                ? Image.network(
+                    imageUrl,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _placeholder(),
+                  )
+                : _placeholder(),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  artistName,
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (addedById != null && addedById.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Added by: $addedById',
+                    style: const TextStyle(color: Colors.grey, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: const Color(0xFF212121),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Icon(Icons.music_note, color: Colors.grey, size: 24),
+    );
+  }
+}
+
+// ── Pending vote row ───────────────────────────────────────────────────────────
+
+class _PendingVoteRow extends StatelessWidget {
+  final Map<String, dynamic> vote;
+
+  const _PendingVoteRow({required this.vote});
+
+  @override
+  Widget build(BuildContext context) {
+    final songName = vote['songName'] as String? ?? 'Unknown';
+    final artistName = vote['artistName'] as String? ?? '';
+    final ratings = vote['ratings'];
+    final voteCount = (ratings is Map) ? ratings.length : 0;
+    final status = vote['status'] as String? ?? 'pending';
+
+    final statusColor = switch (status) {
+      'accepted' => const Color(0xFF1DB954),
+      'rejected' => Colors.red,
+      _ => Colors.amber,
+    };
+    final statusLabel = switch (status) {
+      'accepted' => 'Accepted',
+      'rejected' => 'Rejected',
+      _ => 'Pending',
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.grey[900],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    songName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (artistName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      artistName,
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$voteCount ${voteCount == 1 ? 'vote' : 'votes'}',
+                  style: const TextStyle(
+                      color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Leave group button ─────────────────────────────────────────────────────────
 
 class _LeaveGroupButton extends StatelessWidget {
   final String groupId;
@@ -398,38 +715,6 @@ class _LeaveGroupButton extends StatelessWidget {
                 style: TextStyle(color: Colors.red)),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Propose song button ───────────────────────────────────────────────────────
-
-class _ProposeSongButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _ProposeSongButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF1DB954),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
-          elevation: 0,
-        ),
-        icon: const Icon(Icons.music_note_outlined),
-        label: const Text(
-          'Propose a Song',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        ),
-        onPressed: onTap,
       ),
     );
   }

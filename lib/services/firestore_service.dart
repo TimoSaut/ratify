@@ -94,7 +94,8 @@ class FirestoreService {
   }
 
   Future<String> createGroup(
-      String name, String spotifyPlaylistId, String userId) async {
+      String name, String spotifyPlaylistId, String userId,
+      {String? coverUrl}) async {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rng = Random.secure();
     final inviteCode =
@@ -108,6 +109,7 @@ class FirestoreService {
       'members': [userId],
       'inviteCode': inviteCode,
       'createdAt': FieldValue.serverTimestamp(),
+      if (coverUrl != null) 'coverUrl': coverUrl,
     });
     return doc.id;
   }

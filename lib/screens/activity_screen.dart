@@ -36,8 +36,10 @@ final _section2ExpandedProvider =
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 Future<String> _createGroup(
-    String name, String spotifyPlaylistId, String userId) async {
-  return FirestoreService().createGroup(name, spotifyPlaylistId, userId);
+    String name, String spotifyPlaylistId, String userId,
+    {String? coverUrl}) async {
+  return FirestoreService()
+      .createGroup(name, spotifyPlaylistId, userId, coverUrl: coverUrl);
 }
 
 Future<String> _getInviteCode(String groupId) async {
@@ -161,12 +163,15 @@ class ActivityScreen extends ConsumerWidget {
                 onTap: () async {
                   final name = group['name'] as String? ?? 'Untitled';
                   final id = group['id'] as String? ?? '';
+                  final coverUrl =
+                      group['coverUrl'] as String?;
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => GroupDetailScreen(
                         groupId: id,
                         playlistName: name,
+                        coverUrl: coverUrl,
                       ),
                     ),
                   );
@@ -250,8 +255,13 @@ class ActivityScreen extends ConsumerWidget {
   ) async {
     final name = playlist['name'] as String? ?? 'Untitled';
     final spotifyId = playlist['id'] as String? ?? '';
+    final coverImages = playlist['images'] as List?;
+    final coverUrl = (coverImages != null && coverImages.isNotEmpty)
+        ? coverImages.first['url'] as String?
+        : null;
     try {
-      final groupId = await _createGroup(name, spotifyId, userId);
+      final groupId =
+          await _createGroup(name, spotifyId, userId, coverUrl: coverUrl);
       final inviteCode = await _getInviteCode(groupId);
       ref.invalidate(_rateifyGroupsProvider);
       ref.invalidate(_spotifyPlaylistsProvider);
@@ -337,6 +347,7 @@ class _GroupCard extends StatelessWidget {
     final memberCount = (group['members'] as List?)?.length ?? 0;
     final memberLabel =
         '$memberCount ${memberCount == 1 ? 'member' : 'members'}';
+    final coverUrl = group['coverUrl'] as String?;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -351,18 +362,20 @@ class _GroupCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Cover art placeholder with green checkmark badge
+              // Cover art with green checkmark badge
               Stack(
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1DB954).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.library_music,
-                        color: Color(0xFF1DB954), size: 28),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: coverUrl != null
+                        ? Image.network(
+                            coverUrl,
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _coverPlaceholder(),
+                          )
+                        : _coverPlaceholder(),
                   ),
                   Positioned(
                     right: -2,
@@ -408,6 +421,19 @@ class _GroupCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _coverPlaceholder() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1DB954).withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(Icons.library_music,
+          color: Color(0xFF1DB954), size: 28),
     );
   }
 }
