@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
-import 'library_screen.dart';
+import 'search_screen.dart';
 import '../providers/spotify_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
@@ -132,7 +132,7 @@ class _GroupDetailBody extends ConsumerWidget {
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => LibraryScreen(groupId: groupId),
+                builder: (_) => SearchScreen(groupId: groupId),
               ),
             );
             ref.invalidate(_pendingVotesForGroupProvider(groupId));

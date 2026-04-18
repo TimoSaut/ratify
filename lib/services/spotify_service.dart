@@ -113,4 +113,49 @@ class SpotifyService {
     final data = json.decode(response.body) as Map<String, dynamic>;
     return List<Map<String, dynamic>>.from(data['items'] as List);
   }
+
+  Future<List<Map<String, dynamic>>> searchTracks(String query) async {
+    final uri = Uri.parse('$_baseUrl/search').replace(queryParameters: {
+      'q': query,
+      'type': 'track',
+      'limit': '50',
+    });
+    final response = await http.get(uri, headers: await _authHeaders());
+
+    if (response.statusCode != 200) {
+      throw Exception('searchTracks failed (${response.statusCode}): ${response.body}');
+    }
+
+    final data = json.decode(response.body) as Map<String, dynamic>;
+    final tracks = data['tracks'] as Map<String, dynamic>;
+    return List<Map<String, dynamic>>.from(tracks['items'] as List);
+  }
+
+  Future<List<bool>> checkSavedTracks(List<String> trackIds) async {
+    if (trackIds.isEmpty) return [];
+    final uri = Uri.parse('$_baseUrl/me/tracks/contains')
+        .replace(queryParameters: {'ids': trackIds.join(',')});
+    final response = await http.get(uri, headers: await _authHeaders());
+
+    if (response.statusCode != 200) {
+      throw Exception('checkSavedTracks failed (${response.statusCode}): ${response.body}');
+    }
+
+    return List<bool>.from(json.decode(response.body) as List);
+  }
+
+  Future<void> addTrackToLibrary(String trackId) async {
+    final response = await http.put(
+      Uri.parse('$_baseUrl/me/tracks'),
+      headers: {
+        ...await _authHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({'ids': [trackId]}),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('addTrackToLibrary failed (${response.statusCode}): ${response.body}');
+    }
+  }
 }
