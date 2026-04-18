@@ -162,6 +162,31 @@ class FirestoreService {
     });
   }
 
+  Future<void> proposeSong({
+    required String groupId,
+    required String songId,
+    required String songName,
+    required String artistName,
+    required String albumArt,
+    required String proposedBy,
+  }) async {
+    final now = DateTime.now();
+    await FirebaseFirestore.instance
+        .collection(pendingVotesCollection)
+        .add({
+      'groupId': groupId,
+      'songId': songId,
+      'songName': songName,
+      'artistName': artistName,
+      'albumArt': albumArt,
+      'proposedBy': proposedBy,
+      'proposedAt': Timestamp.fromDate(now),
+      'expiresAt': Timestamp.fromDate(now.add(const Duration(hours: 24))),
+      'status': 'pending',
+      'ratings': {},
+    });
+  }
+
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
     // TODO: implement getPendingVotes
     print('TODO: getPendingVotes songId=$songId');

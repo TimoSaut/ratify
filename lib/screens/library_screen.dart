@@ -4,19 +4,43 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'settings_screen.dart';
 import 'song_detail_screen.dart';
 import '../providers/spotify_provider.dart';
+import '../services/firestore_service.dart';
 
 final _libraryToggleProvider = StateProvider.autoDispose<int>((ref) => 0);
 // null = All, 0 = Unrated, 1-5 = star count
 final _songFilterProvider = StateProvider.autoDispose<int?>((ref) => null);
+final _searchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
 
-class LibraryScreen extends ConsumerWidget {
-  const LibraryScreen({super.key});
+class LibraryScreen extends ConsumerStatefulWidget {
+  final String? groupId;
+
+  const LibraryScreen({super.key, this.groupId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedTab = ref.watch(_libraryToggleProvider);
     final profileImageUrl =
         ref.watch(userProvider).value?['images']?.first?['url'] as String?;
+    final isProposeMode = widget.groupId != null;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -24,28 +48,30 @@ class LibraryScreen extends ConsumerWidget {
         backgroundColor: Colors.black,
         centerTitle: true,
         elevation: 0,
-        leading: GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SettingsScreen()),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: const Color(0xFF535353),
-              backgroundImage: profileImageUrl != null
-                  ? NetworkImage(profileImageUrl)
-                  : null,
-              child: profileImageUrl == null
-                  ? const Icon(Icons.person, color: Colors.white)
-                  : null,
-            ),
-          ),
-        ),
-        title: const Text(
-          'Library',
-          style: TextStyle(
+        leading: isProposeMode
+            ? null
+            : GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: const Color(0xFF535353),
+                    backgroundImage: profileImageUrl != null
+                        ? NetworkImage(profileImageUrl)
+                        : null,
+                    child: profileImageUrl == null
+                        ? const Icon(Icons.person, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              ),
+        title: Text(
+          isProposeMode ? 'Propose a Song' : 'Library',
+          style: const TextStyle(
               color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
       ),
@@ -53,8 +79,7 @@ class LibraryScreen extends ConsumerWidget {
         children: [
           // Segmented toggle
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF212121),
@@ -79,11 +104,38 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ),
 
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (v) =>
+                  ref.read(_searchQueryProvider.notifier).state = v.trim(),
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              decoration: InputDecoration(
+                hintText: 'Search…',
+                hintStyle:
+                    const TextStyle(color: Colors.grey, fontSize: 15),
+                prefixIcon:
+                    const Icon(Icons.search, color: Colors.grey, size: 20),
+                filled: true,
+                fillColor: const Color(0xFF1A1A1A),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 10),
+                isDense: true,
+              ),
+            ),
+          ),
+
           // Content — each view owns its own provider watch
           Expanded(
             child: selectedTab == 0
-                ? const _AlbumGrid()
-                : const _SongList(),
+                ? _AlbumGrid(groupId: widget.groupId)
+                : _SongList(groupId: widget.groupId),
           ),
         ],
       ),
@@ -134,7 +186,9 @@ class _ToggleButton extends StatelessWidget {
 // ── Album grid (derived from savedTracksProvider) ─────────────────────────────
 
 class _AlbumGrid extends ConsumerStatefulWidget {
-  const _AlbumGrid();
+  final String? groupId;
+
+  const _AlbumGrid({this.groupId});
 
   @override
   ConsumerState<_AlbumGrid> createState() => _AlbumGridState();
@@ -166,6 +220,7 @@ class _AlbumGridState extends ConsumerState<_AlbumGrid> {
   Widget build(BuildContext context) {
     final tracksState = ref.watch(savedTracksProvider);
     final allTracks = tracksState.items;
+    final query = ref.watch(_searchQueryProvider).toLowerCase();
 
     // Derive unique albums from loaded tracks, preserving first-seen order.
     final seenIds = <String>{};
@@ -177,6 +232,18 @@ class _AlbumGridState extends ConsumerState<_AlbumGrid> {
       if (id == null || !seenIds.add(id)) continue;
       albums.add(album);
     }
+
+    // Filter by search query
+    final filtered = query.isEmpty
+        ? albums
+        : albums.where((a) {
+            final name = (a['name'] as String? ?? '').toLowerCase();
+            final artist = ((a['artists'] as List?)?.firstOrNull?['name']
+                        as String? ??
+                    '')
+                .toLowerCase();
+            return name.contains(query) || artist.contains(query);
+          }).toList();
 
     return Column(
       children: [
@@ -190,9 +257,9 @@ class _AlbumGridState extends ConsumerState<_AlbumGrid> {
               mainAxisSpacing: 16,
               childAspectRatio: 0.75,
             ),
-            itemCount: albums.length,
+            itemCount: filtered.length,
             itemBuilder: (context, index) {
-              final album = albums[index];
+              final album = filtered[index];
               final albumId = album['id'] as String? ?? '';
               final name = album['name'] as String? ?? '';
               final artist = (album['artists'] as List?)
@@ -213,6 +280,7 @@ class _AlbumGridState extends ConsumerState<_AlbumGrid> {
                       builder: (_) => _AlbumTracksScreen(
                         album: album,
                         tracks: albumTracks,
+                        groupId: widget.groupId,
                       ),
                     ),
                   );
@@ -265,7 +333,9 @@ class _AlbumGridState extends ConsumerState<_AlbumGrid> {
 // ── Song list (savedTracksProvider, paginated) ────────────────────────────────
 
 class _SongList extends ConsumerStatefulWidget {
-  const _SongList();
+  final String? groupId;
+
+  const _SongList({this.groupId});
 
   @override
   ConsumerState<_SongList> createState() => _SongListState();
@@ -365,6 +435,41 @@ class _SongListState extends ConsumerState<_SongList> {
     );
   }
 
+  Future<void> _proposeSong(
+      BuildContext context, Map<String, dynamic> track) async {
+    final groupId = widget.groupId;
+    if (groupId == null) return;
+    final userId = ref.read(userProvider).value?['id'] as String?;
+    if (userId == null) return;
+
+    final songId = track['id'] as String? ?? '';
+    final songName = track['name'] as String? ?? '';
+    final artistName = (track['artists'] as List?)?.firstOrNull?['name']
+            as String? ??
+        '';
+    final albumArt =
+        ((track['album']?['images'] as List?)?.firstOrNull as Map?)?['url']
+                as String? ??
+            '';
+
+    try {
+      await FirestoreService().proposeSong(
+        groupId: groupId,
+        songId: songId,
+        songName: songName,
+        artistName: artistName,
+        albumArt: albumArt,
+        proposedBy: userId,
+      );
+      if (!context.mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(savedTracksProvider);
@@ -372,38 +477,55 @@ class _SongListState extends ConsumerState<_SongList> {
     final ratings = ratingsAsync.value ?? {};
     final activeFilter = ref.watch(_songFilterProvider);
     final filterActive = activeFilter != null;
+    final query = ref.watch(_searchQueryProvider).toLowerCase();
+    final isProposeMode = widget.groupId != null;
 
-    final allTracks = state.items;
-    final tracks = activeFilter == null
-        ? allTracks
-        : allTracks.where((track) {
-            final songId = track['id'] as String?;
-            if (songId == null) return false;
-            final rating = ratings[songId];
-            if (activeFilter == 0) return rating == null;
-            return rating == activeFilter;
-          }).toList();
+    var tracks = state.items;
+
+    // Apply rating filter (normal mode only)
+    if (!isProposeMode && activeFilter != null) {
+      tracks = tracks.where((track) {
+        final songId = track['id'] as String?;
+        if (songId == null) return false;
+        final rating = ratings[songId];
+        if (activeFilter == 0) return rating == null;
+        return rating == activeFilter;
+      }).toList();
+    }
+
+    // Apply search filter
+    if (query.isNotEmpty) {
+      tracks = tracks.where((track) {
+        final name = (track['name'] as String? ?? '').toLowerCase();
+        final artist = ((track['artists'] as List?)?.firstOrNull?['name']
+                    as String? ??
+                '')
+            .toLowerCase();
+        return name.contains(query) || artist.contains(query);
+      }).toList();
+    }
 
     return Column(
       children: [
-        // Filter bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.filter_list,
-                  color: filterActive
-                      ? const Color(0xFF1DB954)
-                      : Colors.grey,
+        // Filter bar (normal mode only)
+        if (!isProposeMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.filter_list,
+                    color: filterActive
+                        ? const Color(0xFF1DB954)
+                        : Colors.grey,
+                  ),
+                  onPressed: () => _showFilterSheet(context),
                 ),
-                onPressed: () => _showFilterSheet(context),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
         Expanded(
           child: ListView.separated(
             controller: _scrollController,
@@ -447,24 +569,29 @@ class _SongListState extends ConsumerState<_SongList> {
                 subtitle: Text(artistName,
                     style: const TextStyle(
                         color: Colors.grey, fontSize: 13)),
-                trailing: rating != null
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(
-                          rating,
-                          (_) => const Icon(Icons.star,
-                              color: Color(0xFF1DB954), size: 14),
+                trailing: isProposeMode
+                    ? const Icon(Icons.add_circle_outline,
+                        color: Color(0xFF1DB954), size: 24)
+                    : (rating != null
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(
+                              rating,
+                              (_) => const Icon(Icons.star,
+                                  color: Color(0xFF1DB954), size: 14),
+                            ),
+                          )
+                        : const Text('unrated',
+                            style: TextStyle(
+                                color: Colors.grey, fontSize: 12))),
+                onTap: isProposeMode
+                    ? () => _proposeSong(context, track)
+                    : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SongDetailScreen(track: track),
+                          ),
                         ),
-                      )
-                    : const Text('unrated',
-                        style:
-                            TextStyle(color: Colors.grey, fontSize: 12)),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SongDetailScreen(track: track),
-                  ),
-                ),
               );
             },
           ),
@@ -481,22 +608,59 @@ class _SongListState extends ConsumerState<_SongList> {
 
 // ── Album tracks screen ───────────────────────────────────────────────────────
 
-class _AlbumTracksScreen extends StatelessWidget {
+class _AlbumTracksScreen extends ConsumerWidget {
   final Map<String, dynamic> album;
   final List<Map<String, dynamic>> tracks;
+  final String? groupId;
 
   const _AlbumTracksScreen({
     required this.album,
     required this.tracks,
+    this.groupId,
   });
 
+  Future<void> _proposeSong(BuildContext context, WidgetRef ref,
+      Map<String, dynamic> track) async {
+    if (groupId == null) return;
+    final userId = ref.read(userProvider).value?['id'] as String?;
+    if (userId == null) return;
+
+    final songId = track['id'] as String? ?? '';
+    final songName = track['name'] as String? ?? '';
+    final artistName = (track['artists'] as List?)?.firstOrNull?['name']
+            as String? ??
+        '';
+    final albumArt =
+        (album['images'] as List?)?.firstOrNull?['url'] as String? ?? '';
+
+    try {
+      await FirestoreService().proposeSong(
+        groupId: groupId!,
+        songId: songId,
+        songName: songName,
+        artistName: artistName,
+        albumArt: albumArt,
+        proposedBy: userId,
+      );
+      if (!context.mounted) return;
+      final nav = Navigator.of(context);
+      nav.pop(); // album tracks screen
+      nav.pop(); // library screen
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final albumName = album['name'] as String? ?? '';
     final artist =
         (album['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
     final imageUrl =
         (album['images'] as List?)?.firstOrNull?['url'] as String?;
+    final isProposeMode = groupId != null;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -558,8 +722,7 @@ class _AlbumTracksScreen extends StatelessWidget {
           ),
           const Divider(color: Color(0xFF2A2A2A), height: 1),
 
-          // Track list — full track objects from savedTracksProvider,
-          // already contain album data so no enrichment needed.
+          // Track list
           Expanded(
             child: tracks.isEmpty
                 ? const Center(
@@ -606,12 +769,19 @@ class _AlbumTracksScreen extends StatelessWidget {
                         subtitle: Text(trackArtist,
                             style: const TextStyle(
                                 color: Colors.grey, fontSize: 13)),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SongDetailScreen(track: track),
-                          ),
-                        ),
+                        trailing: isProposeMode
+                            ? const Icon(Icons.add_circle_outline,
+                                color: Color(0xFF1DB954), size: 24)
+                            : null,
+                        onTap: isProposeMode
+                            ? () => _proposeSong(context, ref, track)
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        SongDetailScreen(track: track),
+                                  ),
+                                ),
                       );
                     },
                   ),

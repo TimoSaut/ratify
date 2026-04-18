@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
+import 'library_screen.dart';
 import '../providers/spotify_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
@@ -127,9 +128,15 @@ class _GroupDetailBody extends ConsumerWidget {
 
         // ── Propose a Song ─────────────────────────────────────────────────
         _ProposeSongButton(
-          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Coming soon!')),
-          ),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => LibraryScreen(groupId: groupId),
+              ),
+            );
+            ref.invalidate(_pendingVotesForGroupProvider(groupId));
+          },
         ),
         const SizedBox(height: 28),
 
@@ -556,6 +563,7 @@ class _PendingVoteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final songName = vote['songName'] as String? ?? 'Unknown';
     final artistName = vote['artistName'] as String? ?? '';
+    final albumArt = vote['albumArt'] as String?;
     final ratings = vote['ratings'];
     final voteCount = (ratings is Map) ? ratings.length : 0;
     final status = vote['status'] as String? ?? 'pending';
@@ -582,6 +590,20 @@ class _PendingVoteRow extends StatelessWidget {
         ),
         child: Row(
           children: [
+            // Album art
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: albumArt != null && albumArt.isNotEmpty
+                  ? Image.network(
+                      albumArt,
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _artPlaceholder(),
+                    )
+                  : _artPlaceholder(),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -640,6 +662,18 @@ class _PendingVoteRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _artPlaceholder() {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: const Color(0xFF212121),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Icon(Icons.music_note, color: Colors.grey, size: 22),
     );
   }
 }
