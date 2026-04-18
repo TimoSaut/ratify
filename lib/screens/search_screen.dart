@@ -1,10 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/spotify_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/spotify_service.dart';
-import '../services/firestore_service.dart';
+import 'song_detail_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -112,45 +111,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _savingIds.remove(trackId));
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
-    }
-  }
-
-  // ── Propose ───────────────────────────────────────────────────────────────
-
-  Future<void> _proposeSong(Map<String, dynamic> track) async {
-    final userId = ref.read(userProvider).value?['id'] as String?;
-    if (userId == null) return;
-
-    final songId = track['id'] as String? ?? '';
-    final songName = track['name'] as String? ?? '';
-    final artistName =
-        (track['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
-    final albumArt =
-        ((track['album']?['images'] as List?)?.firstOrNull as Map?)?['url']
-                as String? ??
-            '';
-
-    try {
-      await FirestoreService().proposeSong(
-        groupId: widget.groupId,
-        songId: songId,
-        songName: songName,
-        artistName: artistName,
-        albumArt: albumArt,
-        proposedBy: userId,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Song proposed!'),
-          backgroundColor: Color(0xFF1DB954),
-        ),
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
@@ -287,9 +247,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       ),
               ),
               const SizedBox(width: 4),
-              // Propose button
+              // Propose button — navigate to SongDetailScreen in propose mode
               TextButton(
-                onPressed: () => _proposeSong(track),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SongDetailScreen(
+                      track: track,
+                      groupId: widget.groupId,
+                    ),
+                  ),
+                ),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF1DB954),
                   padding: const EdgeInsets.symmetric(

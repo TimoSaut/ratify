@@ -4,13 +4,29 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/song_detail_provider.dart';
 import '../providers/spotify_provider.dart';
+import '../services/firestore_service.dart';
 
 final selectedRatingProvider = StateProvider.autoDispose<int>((ref) => 0);
 
-class SongDetailScreen extends ConsumerWidget {
+class SongDetailScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> track;
+  final String? groupId;
 
-  const SongDetailScreen({super.key, required this.track});
+  const SongDetailScreen({
+    super.key,
+    required this.track,
+    this.groupId,
+  });
+
+  @override
+  ConsumerState<SongDetailScreen> createState() => _SongDetailScreenState();
+}
+
+class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
+  // Set to true when "Rate & Propose" is tapped so the rating listener
+  // knows to follow up with the propose step instead of showing the
+  // normal "Rating submitted!" snackbar.
+  bool _proposePending = false;
 
   Future<void> _openInSpotify(String trackId) async {
     final deeplink = Uri.parse('spotify:track:$trackId');
@@ -24,18 +40,64 @@ class SongDetailScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _doPropose(BuildContext context) async {
+    setState(() => _proposePending = false);
+    ref.invalidate(userRatingsProvider);
+
+    final userId = ref.read(userProvider).value?['id'] as String?;
+    final groupId = widget.groupId;
+    if (userId == null || groupId == null) return;
+
+    final songId = widget.track['id'] as String? ?? '';
+    final songName = widget.track['name'] as String? ?? '';
+    final artistName =
+        (widget.track['artists'] as List?)?.firstOrNull?['name'] as String? ??
+            '';
+    final albumArt =
+        ((widget.track['album']?['images'] as List?)?.firstOrNull
+                    as Map?)?['url'] as String? ??
+            '';
+
+    try {
+      await FirestoreService().proposeSong(
+        groupId: groupId,
+        songId: songId,
+        songName: songName,
+        artistName: artistName,
+        albumArt: albumArt,
+        proposedBy: userId,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Song proposed to group!'),
+          backgroundColor: Color(0xFF1DB954),
+        ),
+      );
+      final nav = Navigator.of(context);
+      nav.pop(); // back to search screen
+      nav.pop(); // back to group detail
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final submitState = ref.watch(songDetailProvider);
     final selectedRating = ref.watch(selectedRatingProvider);
+    final isProposeMode = widget.groupId != null;
 
-    final trackName = track['name'] as String? ?? '';
+    final trackName = widget.track['name'] as String? ?? '';
     final artistName =
-        (track['artists'] as List?)?.firstOrNull?['name'] as String? ?? '';
+        (widget.track['artists'] as List?)?.firstOrNull?['name'] as String? ??
+            '';
     final imageUrl =
-        ((track['album']?['images'] as List?)?.firstOrNull
+        ((widget.track['album']?['images'] as List?)?.firstOrNull
             as Map?)?['url'] as String?;
-    final String? songId = track['id'] as String?;
+    final String? songId = widget.track['id'] as String?;
 
     final existingRatingAsync =
         songId != null ? ref.watch(existingRatingProvider(songId)) : null;
@@ -52,12 +114,17 @@ class SongDetailScreen extends ConsumerWidget {
     );
 
     ref.listen<AsyncValue<void>>(songDetailProvider, (_, state) {
-      if (state is AsyncData) {
+      if (state is AsyncData && _proposePending) {
+        // Propose mode: rating saved — now propose to the group
+        _doPropose(context);
+      } else if (state is AsyncData && !_proposePending) {
+        // Normal mode: just confirm the rating
         ref.invalidate(userRatingsProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Rating submitted!')),
         );
       } else if (state is AsyncError) {
+        if (_proposePending) setState(() => _proposePending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${state.error}')),
         );
@@ -186,8 +253,8 @@ class SongDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // Submit button / loading indicator
-            submitState.isLoading
+            // Submit / Rate & Propose button
+            submitState.isLoading || _proposePending
                 ? const CircularProgressIndicator(color: Color(0xFF1DB954))
                 : SizedBox(
                     width: double.infinity,
@@ -202,15 +269,27 @@ class SongDetailScreen extends ConsumerWidget {
                       ),
                       onPressed: selectedRating == 0 || songId == null
                           ? null
-                          : () => ref
-                              .read(songDetailProvider.notifier)
-                              .submitRating(songId, '', selectedRating),
+                          : isProposeMode
+                              ? () {
+                                  setState(() => _proposePending = true);
+                                  ref
+                                      .read(songDetailProvider.notifier)
+                                      .submitRating(
+                                          songId, '', selectedRating);
+                                }
+                              : () => ref
+                                  .read(songDetailProvider.notifier)
+                                  .submitRating(songId, '', selectedRating),
                       child: Text(
                         selectedRating == 0
-                            ? 'Select a rating'
-                            : isAlreadyRated
-                                ? 'Update Rating'
-                                : 'Submit Rating',
+                            ? (isProposeMode
+                                ? 'Select a rating to propose'
+                                : 'Select a rating')
+                            : (isProposeMode
+                                ? 'Rate & Propose'
+                                : (isAlreadyRated
+                                    ? 'Update Rating'
+                                    : 'Submit Rating')),
                         style: const TextStyle(
                             color: Colors.white, fontSize: 16),
                       ),
