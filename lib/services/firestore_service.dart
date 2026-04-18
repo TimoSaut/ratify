@@ -189,6 +189,48 @@ class FirestoreService {
       'status': 'pending',
       'ratings': {proposedBy: proposerRating},
     });
+
+    // Check if other group members already have a library rating for this song.
+    // If they do, seed their vote automatically so they don't have to re-rate.
+    final groupDoc = await FirebaseFirestore.instance
+        .collection(groupsCollection)
+        .doc(groupId)
+        .get();
+    final members =
+        List<String>.from(groupDoc.data()?['members'] as List? ?? []);
+
+    // The proposer's vote is already written above; only seed the others.
+    final otherMembers =
+        members.where((id) => id != proposedBy).toList();
+
+    if (otherMembers.isNotEmpty) {
+      // whereIn supports at most 30 values.
+      final ratingsSnapshot = await FirebaseFirestore.instance
+          .collection(ratingsCollection)
+          .where('songId', isEqualTo: songId)
+          .where('userId', whereIn: otherMembers.take(30).toList())
+          .get();
+
+      if (ratingsSnapshot.docs.isNotEmpty) {
+        final updates = <String, dynamic>{};
+        for (final rDoc in ratingsSnapshot.docs) {
+          final data = rDoc.data();
+          final memberId = data['userId'] as String?;
+          final rating = data['rating'] as int?;
+          if (memberId != null && rating != null && rating > 0) {
+            // Use dot-notation so we only touch the ratings sub-field.
+            updates['ratings.$memberId'] = rating;
+          }
+        }
+        if (updates.isNotEmpty) {
+          await doc.update(updates);
+        }
+      }
+    }
+
+    // Resolve immediately if every member now has a vote.
+    await checkAndResolvePendingVote(doc.id);
+
     return doc.id;
   }
 

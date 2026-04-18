@@ -31,6 +31,16 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
   bool _proposePending = false;
   bool _votePending = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Debug: print mode values so we can verify what the screen receives.
+    debugPrint(
+      '[SongDetailScreen] pendingVoteId=${widget.pendingVoteId} '
+      'groupId=${widget.groupId}',
+    );
+  }
+
   Future<void> _openInSpotify(String trackId) async {
     final deeplink = Uri.parse('spotify:track:$trackId');
     if (await canLaunchUrl(deeplink)) {
@@ -43,14 +53,19 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
     }
   }
 
-  Future<void> _submitVote(BuildContext context) async {
+  Future<void> _submitVote(BuildContext context, int rating) async {
     final userId = ref.read(userProvider).value?['id'] as String?;
-    if (userId == null || widget.pendingVoteId == null) return;
-    final rating = ref.read(selectedRatingProvider);
+    if (userId == null || widget.pendingVoteId == null || rating == 0) return;
+    final songId = widget.track['id'] as String? ?? '';
     setState(() => _votePending = true);
     try {
-      await FirestoreService().submitVoteOnPendingVote(
-          widget.pendingVoteId!, userId, rating);
+      // Save to the group's pending vote ratings map and resolve if all voted.
+      await FirestoreService()
+          .submitVoteOnPendingVote(widget.pendingVoteId!, userId, rating);
+      // Also persist to the user's personal library ratings collection.
+      if (songId.isNotEmpty) {
+        await FirestoreService().updateRating(songId, userId, rating);
+      }
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -123,7 +138,9 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
     final submitState = ref.watch(songDetailProvider);
     final selectedRating = ref.watch(selectedRatingProvider);
     final isProposeMode = widget.groupId != null;
-    final isVoteMode = widget.pendingVoteId != null;
+    // Vote mode: opened from a pending vote card, not from the propose flow.
+    // When groupId is also set it means the user is still in the propose flow.
+    final isVoteMode = widget.pendingVoteId != null && widget.groupId == null;
 
     final trackName = widget.track['name'] as String? ?? '';
     final artistName =
@@ -168,6 +185,13 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
 
     final existingRating = existingRatingAsync?.value;
     final isAlreadyRated = existingRating != null && existingRating > 0;
+
+    // In vote mode, fall back to the library rating if the user hasn't
+    // tapped stars yet — this covers the case where existingRatingProvider
+    // was already cached and the ref.listen never fired.
+    final effectiveRating = (isVoteMode && selectedRating == 0 && isAlreadyRated)
+        ? existingRating
+        : selectedRating;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -265,7 +289,8 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
 
             const SizedBox(height: 12),
 
-            // Star rating row
+            // Star rating row — uses effectiveRating so pre-filled stars
+            // are visible immediately even before the listener fires.
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(5, (index) {
@@ -275,10 +300,10 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
                       .read(selectedRatingProvider.notifier)
                       .state = starValue,
                   icon: Icon(
-                    starValue <= selectedRating
+                    starValue <= effectiveRating
                         ? Icons.star
                         : Icons.star_border,
-                    color: starValue <= selectedRating
+                    color: starValue <= effectiveRating
                         ? Colors.white
                         : Colors.grey,
                     size: 36,
@@ -302,10 +327,11 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
                           borderRadius: BorderRadius.circular(30),
                         ),
                       ),
-                      onPressed: selectedRating == 0 || songId == null
+                      onPressed: (isVoteMode ? effectiveRating == 0 : selectedRating == 0) ||
+                              songId == null
                           ? null
                           : isVoteMode
-                              ? () => _submitVote(context)
+                              ? () => _submitVote(context, effectiveRating)
                               : isProposeMode
                                   ? () {
                                       setState(() => _proposePending = true);
@@ -319,7 +345,7 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
                                       .submitRating(songId, '', selectedRating),
                       child: Text(
                         isVoteMode
-                            ? (selectedRating == 0
+                            ? (effectiveRating == 0
                                 ? 'Select a rating to vote'
                                 : 'Submit Vote')
                             : selectedRating == 0
