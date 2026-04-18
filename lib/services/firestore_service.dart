@@ -260,6 +260,15 @@ class FirestoreService {
     }
   }
 
+  Future<void> submitVoteOnPendingVote(
+      String pendingVoteId, String userId, int rating) async {
+    await FirebaseFirestore.instance
+        .collection(pendingVotesCollection)
+        .doc(pendingVoteId)
+        .update({'ratings.$userId': rating});
+    await checkAndResolvePendingVote(pendingVoteId);
+  }
+
   Future<void> deletePendingVote(String pendingVoteId) async {
     await FirebaseFirestore.instance
         .collection(pendingVotesCollection)

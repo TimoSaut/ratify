@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'search_screen.dart';
+import 'song_detail_screen.dart';
 import '../providers/spotify_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
@@ -170,7 +171,7 @@ class _GroupDetailBody extends ConsumerWidget {
         // ── Pending Votes ──────────────────────────────────────────────────
         _sectionTitle('Pending Votes'),
         const SizedBox(height: 12),
-        _buildVotesSection(votesAsync, userId),
+        _buildVotesSection(votesAsync, userId, members),
         const SizedBox(height: 28),
 
         // ── Leave Group ────────────────────────────────────────────────────
@@ -235,7 +236,9 @@ class _GroupDetailBody extends ConsumerWidget {
   }
 
   Widget _buildVotesSection(
-      AsyncValue<List<Map<String, dynamic>>> votesAsync, String? userId) {
+      AsyncValue<List<Map<String, dynamic>>> votesAsync,
+      String? userId,
+      List<String> members) {
     return votesAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
@@ -247,7 +250,11 @@ class _GroupDetailBody extends ConsumerWidget {
         if (votes.isEmpty) return _emptyCard('No pending votes yet');
         return Column(
           children: votes
-              .map((vote) => _PendingVoteRow(vote: vote, userId: userId))
+              .map((vote) => _PendingVoteRow(
+                    vote: vote,
+                    userId: userId,
+                    members: members,
+                  ))
               .toList(),
         );
       },
@@ -571,21 +578,33 @@ class _TrackRow extends StatelessWidget {
 class _PendingVoteRow extends StatelessWidget {
   final Map<String, dynamic> vote;
   final String? userId;
+  final List<String> members;
 
-  const _PendingVoteRow({required this.vote, this.userId});
+  const _PendingVoteRow({
+    required this.vote,
+    required this.members,
+    this.userId,
+  });
 
   @override
   Widget build(BuildContext context) {
     final songName = vote['songName'] as String? ?? 'Unknown';
     final artistName = vote['artistName'] as String? ?? '';
     final albumArt = vote['albumArt'] as String?;
-    final ratings = vote['ratings'];
-    final voteCount = (ratings is Map) ? ratings.length : 0;
     final status = vote['status'] as String? ?? 'pending';
     final voteId = vote['id'] as String? ?? '';
     final proposedBy = vote['proposedBy'] as String?;
-    final canWithdraw =
-        status == 'pending' && userId != null && proposedBy == userId;
+
+    final ratingsMap = vote['ratings'] is Map
+        ? Map<String, dynamic>.from(vote['ratings'] as Map)
+        : <String, dynamic>{};
+    final votedCount = ratingsMap.length;
+    final totalCount = members.length;
+    final userRating =
+        userId != null ? ratingsMap[userId] as int? : null;
+    final hasVoted = userRating != null;
+    final isPending = status == 'pending';
+    final canWithdraw = isPending && userId != null && proposedBy == userId;
 
     final statusColor = switch (status) {
       'accepted' => const Color(0xFF1DB954),
@@ -600,85 +619,156 @@ class _PendingVoteRow extends StatelessWidget {
 
     final card = Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            // Album art
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: albumArt != null && albumArt.isNotEmpty
-                  ? Image.network(
-                      albumArt,
-                      width: 44,
-                      height: 44,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _artPlaceholder(),
-                    )
-                  : _artPlaceholder(),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    songName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (artistName.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+      child: Opacity(
+        opacity: isPending && hasVoted ? 0.55 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              // Album art
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: albumArt != null && albumArt.isNotEmpty
+                    ? Image.network(
+                        albumArt,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _artPlaceholder(),
+                      )
+                    : _artPlaceholder(),
+              ),
+              const SizedBox(width: 12),
+              // Song info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      artistName,
+                      songName,
                       style: const TextStyle(
-                          color: Colors.grey, fontSize: 13),
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (artistName.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        artistName,
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+              // Right column — differs by state
+              if (isPending)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '⏳ $votedCount/$totalCount voted',
+                      style: const TextStyle(
+                          color: Colors.amber,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    if (hasVoted)
+                      Text(
+                        '${'★' * userRating}${'☆' * (5 - userRating)}',
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 14),
+                      )
+                    else
+                      SizedBox(
+                        height: 30,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1DB954),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            textStyle: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600),
+                            elevation: 0,
+                          ),
+                          onPressed: () {
+                            final track = {
+                              'id': vote['songId'] as String? ?? '',
+                              'name': songName,
+                              'artists': [
+                                {'name': artistName}
+                              ],
+                              'album': {
+                                'images': albumArt != null &&
+                                        albumArt.isNotEmpty
+                                    ? [
+                                        {'url': albumArt}
+                                      ]
+                                    : <Map>[]
+                              },
+                            };
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SongDetailScreen(
+                                  track: track,
+                                  pendingVoteId: voteId,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text('Rate Now'),
+                        ),
+                      ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$votedCount ${votedCount == 1 ? 'vote' : 'votes'}',
+                      style: const TextStyle(
+                          color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$voteCount ${voteCount == 1 ? 'vote' : 'votes'}',
-                  style: const TextStyle(
-                      color: Colors.grey, fontSize: 12),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

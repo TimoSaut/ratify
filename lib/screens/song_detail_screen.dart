@@ -11,11 +11,13 @@ final selectedRatingProvider = StateProvider.autoDispose<int>((ref) => 0);
 class SongDetailScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> track;
   final String? groupId;
+  final String? pendingVoteId;
 
   const SongDetailScreen({
     super.key,
     required this.track,
     this.groupId,
+    this.pendingVoteId,
   });
 
   @override
@@ -27,6 +29,7 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
   // knows to follow up with the propose step instead of showing the
   // normal "Rating submitted!" snackbar.
   bool _proposePending = false;
+  bool _votePending = false;
 
   Future<void> _openInSpotify(String trackId) async {
     final deeplink = Uri.parse('spotify:track:$trackId');
@@ -37,6 +40,31 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
         Uri.parse('https://open.spotify.com/track/$trackId'),
         mode: LaunchMode.externalApplication,
       );
+    }
+  }
+
+  Future<void> _submitVote(BuildContext context) async {
+    final userId = ref.read(userProvider).value?['id'] as String?;
+    if (userId == null || widget.pendingVoteId == null) return;
+    final rating = ref.read(selectedRatingProvider);
+    setState(() => _votePending = true);
+    try {
+      await FirestoreService().submitVoteOnPendingVote(
+          widget.pendingVoteId!, userId, rating);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vote submitted!'),
+          backgroundColor: Color(0xFF1DB954),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _votePending = false);
     }
   }
 
@@ -95,6 +123,7 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
     final submitState = ref.watch(songDetailProvider);
     final selectedRating = ref.watch(selectedRatingProvider);
     final isProposeMode = widget.groupId != null;
+    final isVoteMode = widget.pendingVoteId != null;
 
     final trackName = widget.track['name'] as String? ?? '';
     final artistName =
@@ -259,8 +288,8 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Submit / Rate & Propose button
-            submitState.isLoading || _proposePending
+            // Submit / Rate & Propose / Submit Vote button
+            submitState.isLoading || _proposePending || _votePending
                 ? const CircularProgressIndicator(color: Color(0xFF1DB954))
                 : SizedBox(
                     width: double.infinity,
@@ -275,27 +304,33 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
                       ),
                       onPressed: selectedRating == 0 || songId == null
                           ? null
-                          : isProposeMode
-                              ? () {
-                                  setState(() => _proposePending = true);
-                                  ref
+                          : isVoteMode
+                              ? () => _submitVote(context)
+                              : isProposeMode
+                                  ? () {
+                                      setState(() => _proposePending = true);
+                                      ref
+                                          .read(songDetailProvider.notifier)
+                                          .submitRating(
+                                              songId, '', selectedRating);
+                                    }
+                                  : () => ref
                                       .read(songDetailProvider.notifier)
-                                      .submitRating(
-                                          songId, '', selectedRating);
-                                }
-                              : () => ref
-                                  .read(songDetailProvider.notifier)
-                                  .submitRating(songId, '', selectedRating),
+                                      .submitRating(songId, '', selectedRating),
                       child: Text(
-                        selectedRating == 0
-                            ? (isProposeMode
-                                ? 'Select a rating to propose'
-                                : 'Select a rating')
-                            : (isProposeMode
-                                ? 'Rate & Propose'
-                                : (isAlreadyRated
-                                    ? 'Update Rating'
-                                    : 'Submit Rating')),
+                        isVoteMode
+                            ? (selectedRating == 0
+                                ? 'Select a rating to vote'
+                                : 'Submit Vote')
+                            : selectedRating == 0
+                                ? (isProposeMode
+                                    ? 'Select a rating to propose'
+                                    : 'Select a rating')
+                                : (isProposeMode
+                                    ? 'Rate & Propose'
+                                    : (isAlreadyRated
+                                        ? 'Update Rating'
+                                        : 'Submit Rating')),
                         style: const TextStyle(
                             color: Colors.white, fontSize: 16),
                       ),
