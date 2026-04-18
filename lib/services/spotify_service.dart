@@ -144,6 +144,22 @@ class SpotifyService {
     return List<bool>.from(json.decode(response.body) as List);
   }
 
+  Future<void> addTrackToPlaylist(String playlistId, String trackId) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/playlists/$playlistId/tracks'),
+      headers: {
+        ...await _authHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({'uris': ['spotify:track:$trackId']}),
+    );
+
+    if (response.statusCode != 201) {
+      throw Exception(
+          'addTrackToPlaylist failed (${response.statusCode}): ${response.body}');
+    }
+  }
+
   Future<void> addTrackToLibrary(String trackId) async {
     final response = await http.put(
       Uri.parse('$_baseUrl/me/tracks'),

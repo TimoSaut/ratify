@@ -1,5 +1,8 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../auth/auth_service.dart';
+import '../auth/token_storage.dart';
+import 'spotify_service.dart';
 
 class FirestoreService {
   static const String usersCollection = 'users';
@@ -194,6 +197,12 @@ class FirestoreService {
         .collection(pendingVotesCollection)
         .doc(pendingVoteId);
 
+    // Captured inside the transaction for use after it completes.
+    // Network calls (Spotify) cannot happen inside a Firestore transaction.
+    String? resolvedStatus;
+    String? spotifyPlaylistId;
+    String? songId;
+
     await FirebaseFirestore.instance.runTransaction((transaction) async {
       final voteDoc = await transaction.get(voteRef);
       if (!voteDoc.exists) return;
@@ -228,9 +237,27 @@ class FirestoreService {
           .reduce((a, b) => a + b);
       final average = sum / members.length;
 
-      transaction.update(
-          voteRef, {'status': average >= 3.0 ? 'accepted' : 'rejected'});
+      resolvedStatus = average >= 3.0 ? 'accepted' : 'rejected';
+      transaction.update(voteRef, {'status': resolvedStatus});
+
+      // Capture data needed for the Spotify call after the transaction
+      if (resolvedStatus == 'accepted') {
+        spotifyPlaylistId =
+            groupDoc.data()?['spotifyPlaylistId'] as String?;
+        songId = data['songId'] as String?;
+      }
     });
+
+    // Add the track to the Spotify playlist outside the transaction
+    if (resolvedStatus == 'accepted' &&
+        spotifyPlaylistId != null &&
+        spotifyPlaylistId!.isNotEmpty &&
+        songId != null &&
+        songId!.isNotEmpty) {
+      final authService = AuthService(tokenStorage: TokenStorage());
+      await SpotifyService(authService: authService)
+          .addTrackToPlaylist(spotifyPlaylistId!, songId!);
+    }
   }
 
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
