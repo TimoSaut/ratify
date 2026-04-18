@@ -46,6 +46,8 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
 
     final userId = ref.read(userProvider).value?['id'] as String?;
     final groupId = widget.groupId;
+    // Read rating synchronously before any awaits
+    final rating = ref.read(selectedRatingProvider);
     if (userId == null || groupId == null) return;
 
     final songId = widget.track['id'] as String? ?? '';
@@ -59,14 +61,18 @@ class _SongDetailScreenState extends ConsumerState<SongDetailScreen> {
             '';
 
     try {
-      await FirestoreService().proposeSong(
+      final pendingVoteId = await FirestoreService().proposeSong(
         groupId: groupId,
         songId: songId,
         songName: songName,
         artistName: artistName,
         albumArt: albumArt,
         proposedBy: userId,
+        proposerRating: rating,
       );
+      // Check whether all members have now voted (resolves immediately
+      // for solo groups, stays pending otherwise)
+      await FirestoreService().checkAndResolvePendingVote(pendingVoteId);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

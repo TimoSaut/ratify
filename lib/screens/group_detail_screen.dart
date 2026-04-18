@@ -574,9 +574,9 @@ class _PendingVoteRow extends StatelessWidget {
       _ => Colors.amber,
     };
     final statusLabel = switch (status) {
-      'accepted' => 'Accepted',
-      'rejected' => 'Rejected',
-      _ => 'Pending',
+      'accepted' => '✓ Accepted',
+      'rejected' => '✗ Rejected',
+      _ => '⏳ Pending',
     };
 
     return Padding(

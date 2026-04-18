@@ -162,16 +162,17 @@ class FirestoreService {
     });
   }
 
-  Future<void> proposeSong({
+  Future<String> proposeSong({
     required String groupId,
     required String songId,
     required String songName,
     required String artistName,
     required String albumArt,
     required String proposedBy,
+    int proposerRating = 0,
   }) async {
     final now = DateTime.now();
-    await FirebaseFirestore.instance
+    final doc = await FirebaseFirestore.instance
         .collection(pendingVotesCollection)
         .add({
       'groupId': groupId,
@@ -183,7 +184,52 @@ class FirestoreService {
       'proposedAt': Timestamp.fromDate(now),
       'expiresAt': Timestamp.fromDate(now.add(const Duration(hours: 24))),
       'status': 'pending',
-      'ratings': {},
+      'ratings': {proposedBy: proposerRating},
+    });
+    return doc.id;
+  }
+
+  Future<void> checkAndResolvePendingVote(String pendingVoteId) async {
+    final voteRef = FirebaseFirestore.instance
+        .collection(pendingVotesCollection)
+        .doc(pendingVoteId);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final voteDoc = await transaction.get(voteRef);
+      if (!voteDoc.exists) return;
+
+      final data = voteDoc.data()!;
+      final groupId = data['groupId'] as String?;
+      if (groupId == null) return;
+
+      // Skip already-resolved votes
+      final status = data['status'] as String? ?? 'pending';
+      if (status != 'pending') return;
+
+      final groupRef = FirebaseFirestore.instance
+          .collection(groupsCollection)
+          .doc(groupId);
+      final groupDoc = await transaction.get(groupRef);
+      if (!groupDoc.exists) return;
+
+      final members =
+          List<String>.from(groupDoc.data()?['members'] as List? ?? []);
+      if (members.isEmpty) return;
+
+      final ratings =
+          Map<String, dynamic>.from(data['ratings'] as Map? ?? {});
+
+      // Only resolve once every member has voted
+      final allVoted = members.every((id) => ratings.containsKey(id));
+      if (!allVoted) return;
+
+      final sum = ratings.values
+          .map((v) => (v as num).toDouble())
+          .reduce((a, b) => a + b);
+      final average = sum / members.length;
+
+      transaction.update(
+          voteRef, {'status': average >= 3.0 ? 'accepted' : 'rejected'});
     });
   }
 
