@@ -27,16 +27,16 @@ final _playlistTracksProvider = FutureProvider.autoDispose
   return SpotifyService(authService: authService).getPlaylistTracks(playlistId);
 });
 
-final _pendingVotesForGroupProvider = FutureProvider.autoDispose
-    .family<List<Map<String, dynamic>>, String>((ref, groupId) async {
-  if (groupId.isEmpty) return [];
-  final query = await FirebaseFirestore.instance
+final _pendingVotesForGroupProvider = StreamProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, groupId) {
+  if (groupId.isEmpty) return const Stream.empty();
+  return FirebaseFirestore.instance
       .collection('pendingVotes')
       .where('groupId', isEqualTo: groupId)
-      .get();
-  return query.docs
-      .map((doc) => {'id': doc.id, ...doc.data()})
-      .toList();
+      .snapshots()
+      .map((snapshot) => snapshot.docs
+          .map((doc) => {'id': doc.id, ...doc.data()})
+          .toList());
 });
 
 // ── Screen ─────────────────────────────────────────────────────────────────────
@@ -69,6 +69,19 @@ class GroupDetailScreen extends ConsumerWidget {
               color: Colors.white, fontWeight: FontWeight.bold),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Refresh songs',
+            onPressed: () {
+              final playlistId =
+                  groupAsync.value?['spotifyPlaylistId'] as String? ?? '';
+              if (playlistId.isNotEmpty) {
+                ref.invalidate(_playlistTracksProvider(playlistId));
+              }
+            },
+          ),
+        ],
       ),
       body: groupAsync.when(
         loading: () => const Center(
@@ -135,7 +148,7 @@ class _GroupDetailBody extends ConsumerWidget {
                 builder: (_) => SearchScreen(groupId: groupId),
               ),
             );
-            ref.invalidate(_pendingVotesForGroupProvider(groupId));
+            ref.invalidate(_playlistTracksProvider(spotifyPlaylistId));
           },
         ),
         const SizedBox(height: 28),
@@ -157,7 +170,7 @@ class _GroupDetailBody extends ConsumerWidget {
         // ── Pending Votes ──────────────────────────────────────────────────
         _sectionTitle('Pending Votes'),
         const SizedBox(height: 12),
-        _buildVotesSection(votesAsync),
+        _buildVotesSection(votesAsync, userId),
         const SizedBox(height: 28),
 
         // ── Leave Group ────────────────────────────────────────────────────
@@ -222,7 +235,7 @@ class _GroupDetailBody extends ConsumerWidget {
   }
 
   Widget _buildVotesSection(
-      AsyncValue<List<Map<String, dynamic>>> votesAsync) {
+      AsyncValue<List<Map<String, dynamic>>> votesAsync, String? userId) {
     return votesAsync.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 16),
@@ -233,8 +246,9 @@ class _GroupDetailBody extends ConsumerWidget {
       data: (votes) {
         if (votes.isEmpty) return _emptyCard('No pending votes yet');
         return Column(
-          children:
-              votes.map((vote) => _PendingVoteRow(vote: vote)).toList(),
+          children: votes
+              .map((vote) => _PendingVoteRow(vote: vote, userId: userId))
+              .toList(),
         );
       },
     );
@@ -556,8 +570,9 @@ class _TrackRow extends StatelessWidget {
 
 class _PendingVoteRow extends StatelessWidget {
   final Map<String, dynamic> vote;
+  final String? userId;
 
-  const _PendingVoteRow({required this.vote});
+  const _PendingVoteRow({required this.vote, this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -567,6 +582,10 @@ class _PendingVoteRow extends StatelessWidget {
     final ratings = vote['ratings'];
     final voteCount = (ratings is Map) ? ratings.length : 0;
     final status = vote['status'] as String? ?? 'pending';
+    final voteId = vote['id'] as String? ?? '';
+    final proposedBy = vote['proposedBy'] as String?;
+    final canWithdraw =
+        status == 'pending' && userId != null && proposedBy == userId;
 
     final statusColor = switch (status) {
       'accepted' => const Color(0xFF1DB954),
@@ -579,7 +598,7 @@ class _PendingVoteRow extends StatelessWidget {
       _ => '⏳ Pending',
     };
 
-    return Padding(
+    final card = Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(
         padding:
@@ -662,6 +681,37 @@ class _PendingVoteRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    if (!canWithdraw) return card;
+
+    return Dismissible(
+      key: ValueKey(voteId),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.undo, color: Colors.white, size: 28),
+      ),
+      confirmDismiss: (_) async {
+        try {
+          await FirestoreService().deletePendingVote(voteId);
+          return true;
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not withdraw: $e')),
+            );
+          }
+          return false;
+        }
+      },
+      child: card,
     );
   }
 

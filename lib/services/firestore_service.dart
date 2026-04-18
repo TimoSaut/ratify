@@ -260,6 +260,13 @@ class FirestoreService {
     }
   }
 
+  Future<void> deletePendingVote(String pendingVoteId) async {
+    await FirebaseFirestore.instance
+        .collection(pendingVotesCollection)
+        .doc(pendingVoteId)
+        .delete();
+  }
+
   Future<List<Map<String, dynamic>>> getPendingVotes(String songId) async {
     // TODO: implement getPendingVotes
     print('TODO: getPendingVotes songId=$songId');
